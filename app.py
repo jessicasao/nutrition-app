@@ -10,7 +10,7 @@ st.title("🍎 每日營養計算器")
 st.write("記錄你吃了什麼，自動計算蛋白質、鐵、維生素C")
 
 # === 你的 USDA API Key ===
-USDA_API_KEY = "M3DXYo47JeVwPjPI6UVHq9zei9YNPqx6Vtnrhsfh"  # ⚠️ 改成你的 Key
+USDA_API_KEY = "你的API_KEY"  # ⚠️ 改成你的 Key
 
 # === 初始化 SQLite ===
 current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
