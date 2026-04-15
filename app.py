@@ -461,7 +461,7 @@ with st.sidebar:
 st.header("📊 今日營養統計")
 
 if not st.session_state.user_name:
-    st.info("👈 請輸入名字開始")
+    st.info("👈 請輸入名字開始（按左上角箭頭打開側邊欄）")
 else:
     view_date = st.date_input("查詢日期", date.today())
     
