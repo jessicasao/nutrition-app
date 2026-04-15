@@ -50,6 +50,7 @@ cursor.execute('''
     )
 ''')
 
+# 飲食記錄表
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS meal_logs (
         log_id INTEGER PRIMARY KEY,
@@ -61,6 +62,7 @@ cursor.execute('''
     )
 ''')
 
+# 個人資料表
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS user_profile (
         user_name TEXT PRIMARY KEY,
@@ -69,6 +71,20 @@ cursor.execute('''
         height REAL,
         weight REAL,
         activity_level TEXT
+    )
+''')
+
+# 留言板資料表
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS feedbacks (
+        feedback_id INTEGER PRIMARY KEY,
+        user_name TEXT,
+        feedback_type TEXT,
+        title TEXT,
+        content TEXT,
+        image_url TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_read INTEGER DEFAULT 0
     )
 ''')
 
@@ -204,7 +220,6 @@ with st.sidebar:
                 "極高度活動（體力勞動或每天訓練兩次）"
             ], index=0 if not profile else 0)
             
-            # 儲存按鈕（會變色 + 文字改變）
             if "save_clicked" not in st.session_state:
                 st.session_state.save_clicked = False
             
@@ -293,7 +308,7 @@ with st.sidebar:
     
     st.divider()
     
-    # USDA 新增食物（移到隱藏食物上面）
+    # USDA 新增食物
     if st.session_state.user_name:
         with st.expander("🔍 從 USDA 新增食物"):
             st.caption("搜尋英文食物名稱，可選擇加入「食物」或「飲品」")
@@ -378,6 +393,69 @@ with st.sidebar:
                 st.rerun()
         else:
             st.info(f"沒有可顯示的{selected_category}，請檢查隱藏設定")
+    
+    st.divider()
+    
+    # === 留言板 ===
+    with st.expander("💬 回饋與建議"):
+        st.caption("報告 Bug 或提供建議，我會盡快處理")
+        
+        fb_type = st.selectbox("類型", ["🐛 回報 Bug", "💡 功能建議", "📝 一般意見"])
+        fb_title = st.text_input("標題", placeholder="簡短描述問題")
+        fb_content = st.text_area("詳細內容", height=100, placeholder="請詳細描述...")
+        fb_image_url = st.text_input("圖片網址（選填）", placeholder="https://... 可上傳到 Imgur 後貼網址")
+        
+        if st.button("📨 送出回饋"):
+            if fb_title and fb_content:
+                cursor.execute('''
+                    INSERT INTO feedbacks (user_name, feedback_type, title, content, image_url)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (st.session_state.user_name, fb_type, fb_title, fb_content, fb_image_url))
+                conn.commit()
+                st.success("✅ 已送出，感謝你的回饋！")
+                st.rerun()
+            else:
+                st.warning("請填寫標題和內容")
+    
+    # === 管理留言（只有特定使用者能看到）===
+    # 請把「你的名字」改成你自己的登入名字
+    if st.session_state.user_name == "你的名字":
+        with st.expander("🔧 管理留言（僅限管理員）"):
+            st.caption("查看所有使用者的回饋")
+            
+            cursor.execute("SELECT * FROM feedbacks ORDER BY created_at DESC")
+            all_feedbacks = cursor.fetchall()
+            
+            if all_feedbacks:
+                # 顯示未讀數量
+                unread_count = len([f for f in all_feedbacks if not f["is_read"]])
+                if unread_count > 0:
+                    st.warning(f"📬 有 {unread_count} 則未讀留言")
+                
+                for fb in all_feedbacks:
+                    with st.container():
+                        status = "✅ 已讀" if fb["is_read"] else "🆕 未讀"
+                        st.markdown(f"**{fb['feedback_type']}** | {status} | 📅 {fb['created_at'][:16]}")
+                        st.markdown(f"**{fb['title']}**")
+                        st.caption(f"👤 {fb['user_name'] or '匿名'}")
+                        st.write(fb['content'])
+                        if fb['image_url']:
+                            st.markdown(f"[🔗 查看圖片]({fb['image_url']})")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if not fb["is_read"] and st.button(f"📖 標記已讀", key=f"read_{fb['feedback_id']}"):
+                                cursor.execute("UPDATE feedbacks SET is_read = 1 WHERE feedback_id = ?", (fb['feedback_id'],))
+                                conn.commit()
+                                st.rerun()
+                        with col2:
+                            if st.button(f"🗑️ 刪除", key=f"del_{fb['feedback_id']}"):
+                                cursor.execute("DELETE FROM feedbacks WHERE feedback_id = ?", (fb['feedback_id'],))
+                                conn.commit()
+                                st.rerun()
+                        st.divider()
+            else:
+                st.info("目前沒有留言")
 
 # === 主畫面 ===
 st.header("📊 今日營養統計")
@@ -420,7 +498,6 @@ else:
         total_calcium = df["calcium"].sum()
         total_carbs = df["carbs"].sum()
         
-        # 今日攝取量（包含新增項目）
         st.subheader("📈 今日攝取量")
         
         col1, col2, col3 = st.columns(3)
@@ -436,7 +513,6 @@ else:
         col7, col8, col9 = st.columns(3)
         col7.metric("🍚 碳水化合物", f"{total_carbs:.1f} g")
         
-        # 個人目標顯示
         if "protein_goal" in st.session_state:
             st.markdown("---")
             st.caption("📌 以下是根據你的個人資料計算的每日攝取目標")
@@ -451,7 +527,6 @@ else:
             goal_col5.metric("🦴 鈣目標", f"{st.session_state.calcium_goal:.0f} 毫克")
             goal_col6.metric("🍚 碳水化合物目標", f"{st.session_state.carbs_goal:.0f} 克")
             
-            # 進度條
             st.subheader("🎯 今日進度")
             
             prog_col1, prog_col2 = st.columns(2)
