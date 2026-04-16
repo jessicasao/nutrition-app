@@ -1,141 +1,211 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 import requests
 from datetime import date
 import os
+import json
+from supabase import create_client, Client
 
 st.set_page_config(page_title="營養計算器", page_icon="🍎")
 st.title("🍎 每日營養計算器")
 
+# === 你的 Supabase 設定 ===
+SUPABASE_URL = "https://qpdtdwpvsjsrfueyhwfq.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwZHRkd3B2c2pzcmZ1ZXlod2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc3MjMsImV4cCI6MjA5MTg5MzcyM30.Ncn2-DhoRA41CsSy8qg0u8oKlwPIbFX3NpttTC8kKKg"
+
+# 初始化 Supabase 客戶端
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 # === 你的 USDA API Key ===
-USDA_API_KEY = "M3DXYo47JeVwPjPI6UVHq9zei9YNPqx6Vtnrhsfh"
+USDA_API_KEY = "M3DXYo47JeVwPjPI6UVHq9zei9YNPqx6Vtnrhsfh"  # ⚠️ 改成你的 USDA Key
 
-# === 初始化 SQLite ===
-current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-DB_PATH = os.path.join(current_dir, 'nutrition.db')
-conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-conn.row_factory = sqlite3.Row
-cursor = conn.cursor()
+# === 輔助函數 ===
+def get_user_profile(user_name):
+    """從 Supabase 讀取個人資料"""
+    try:
+        result = supabase.table("user_profile").select("*").eq("user_name", user_name).execute()
+        if result.data:
+            return result.data[0]
+        return None
+    except Exception as e:
+        st.error(f"讀取個人資料失敗：{e}")
+        return None
 
-# 食物表
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS foods (
-        food_id INTEGER PRIMARY KEY,
-        food_name TEXT,
-        category TEXT,
-        protein_g_per_100g REAL,
-        iron_mg_per_100g REAL,
-        vitamin_c_mg_per_100g REAL,
-        calories_per_100g INTEGER,
-        common_unit TEXT,
-        common_gram REAL,
-        fiber_g_per_100g REAL,
-        sugar_g_per_100g REAL,
-        calcium_mg_per_100g REAL,
-        carbs_g_per_100g REAL,
-        vitamin_k_mcg_per_100g REAL,
-        vitamin_b_mg_per_100g REAL,
-        iodine_ug_per_100g REAL,
-        created_by TEXT DEFAULT 'system'
-    )
-''')
+def save_user_profile(user_name, gender, age, height, weight, activity_level):
+    """儲存個人資料到 Supabase"""
+    try:
+        supabase.table("user_profile").upsert({
+            "user_name": user_name,
+            "gender": gender,
+            "age": int(age),
+            "height": float(height),
+            "weight": float(weight),
+            "activity_level": activity_level
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"儲存失敗：{e}")
+        return False
 
-# 隱藏食物記錄表
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS hidden_foods (
-        user_name TEXT,
-        food_id INTEGER,
-        PRIMARY KEY (user_name, food_id)
-    )
-''')
+def get_foods(user_name, category):
+    """取得食物列表（系統 + 使用者自訂，排除隱藏的）"""
+    try:
+        # 取得隱藏的食物 ID
+        hidden = supabase.table("hidden_foods").select("food_id").eq("user_name", user_name).execute()
+        hidden_ids = [h["food_id"] for h in hidden.data]
+        
+        # 取得食物
+        result = supabase.table("foods").select("*").eq("category", category).in_("created_by", ["system", user_name]).execute()
+        
+        # 過濾隱藏的
+        foods = [f for f in result.data if f["food_id"] not in hidden_ids]
+        return foods
+    except Exception as e:
+        st.error(f"讀取食物失敗：{e}")
+        return []
 
-# 飲食記錄表
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS meal_logs (
-        log_id INTEGER PRIMARY KEY,
-        user_name TEXT,
-        log_date TEXT,
-        meal_type TEXT,
-        food_id INTEGER,
-        grams REAL
-    )
-''')
+def save_meal_log(user_name, log_date, meal_type, food_id, grams):
+    """儲存飲食記錄"""
+    try:
+        supabase.table("meal_logs").insert({
+            "user_name": user_name,
+            "log_date": log_date.strftime("%Y-%m-%d"),
+            "meal_type": meal_type,
+            "food_id": food_id,
+            "grams": float(grams)
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"儲存記錄失敗：{e}")
+        return False
 
-# 個人資料表
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS user_profile (
-        user_name TEXT PRIMARY KEY,
-        gender TEXT,
-        age INTEGER,
-        height REAL,
-        weight REAL,
-        activity_level TEXT
-    )
-''')
+def get_today_stats(user_name, target_date):
+    """取得今日統計"""
+    try:
+        result = supabase.table("meal_logs").select("""
+            food_id,
+            foods!inner(food_name, protein_g_per_100g, iron_mg_per_100g, 
+                       vitamin_c_mg_per_100g, fiber_g_per_100g, sugar_g_per_100g,
+                       calcium_mg_per_100g, carbs_g_per_100g),
+            grams
+        """).eq("user_name", user_name).eq("log_date", target_date.strftime("%Y-%m-%d")).execute()
+        
+        stats = []
+        for record in result.data:
+            food = record["foods"]
+            grams = record["grams"]
+            stats.append({
+                "food_name": food["food_name"],
+                "grams": grams,
+                "protein": food["protein_g_per_100g"] * grams / 100,
+                "iron": food["iron_mg_per_100g"] * grams / 100,
+                "vitamin_c": food["vitamin_c_mg_per_100g"] * grams / 100,
+                "fiber": food.get("fiber_g_per_100g", 0) * grams / 100,
+                "sugar": food.get("sugar_g_per_100g", 0) * grams / 100,
+                "calcium": food.get("calcium_mg_per_100g", 0) * grams / 100,
+                "carbs": food.get("carbs_g_per_100g", 0) * grams / 100
+            })
+        return stats
+    except Exception as e:
+        st.error(f"讀取統計失敗：{e}")
+        return []
 
-# 留言板資料表
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS feedbacks (
-        feedback_id INTEGER PRIMARY KEY,
-        user_name TEXT,
-        feedback_type TEXT,
-        title TEXT,
-        content TEXT,
-        image_url TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        is_read INTEGER DEFAULT 0
-    )
-''')
+def toggle_hide_food(user_name, food_id, is_hidden):
+    """隱藏/取消隱藏食物"""
+    try:
+        if is_hidden:
+            supabase.table("hidden_foods").insert({"user_name": user_name, "food_id": food_id}).execute()
+        else:
+            supabase.table("hidden_foods").delete().eq("user_name", user_name).eq("food_id", food_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"操作失敗：{e}")
+        return False
 
-# 插入預設食物
-cursor.execute("SELECT COUNT(*) FROM foods WHERE created_by = 'system'")
-if cursor.fetchone()[0] == 0:
-    foods_data = [
-        ('雞胸肉', '食物', 31.0, 0.9, 0, 165, '克', 1.0, 0, 0, 11, 0, 0, 0, 0, 'system'),
-        ('白飯', '食物', 2.7, 0.2, 0, 130, '碗', 200.0, 0.4, 0, 5, 28, 0, 0.1, 0, 'system'),
-        ('綠花椰菜', '食物', 2.8, 0.7, 89.2, 34, '克', 1.0, 2.6, 1.7, 47, 6.6, 101, 0.2, 0, 'system'),
-        ('蘋果', '食物', 0.3, 0.1, 4.6, 52, '個', 200.0, 2.4, 10, 6, 14, 2.2, 0.04, 0, 'system'),
-        ('雞蛋', '食物', 12.6, 1.2, 0, 155, '個', 55.0, 0, 0.4, 50, 1.1, 0.3, 0.6, 25, 'system'),
-        ('牛肉', '食物', 26.0, 2.6, 0, 250, '克', 1.0, 0, 0, 18, 0, 1.5, 0.4, 0, 'system'),
-        ('鮭魚', '食物', 20.0, 0.8, 0, 208, '克', 1.0, 0, 0, 12, 0, 0.5, 0.6, 0, 'system'),
-        ('吐司', '食物', 8.5, 0.9, 0, 265, '片', 35.0, 2.7, 2.5, 100, 49, 0, 0.2, 0, 'system'),
-        ('鯖魚', '食物', 20.8, 1.8, 0, 262, '條', 150.0, 0, 0, 15, 0, 0.5, 0.4, 0, 'system'),
-        ('豆腐', '食物', 8.1, 1.5, 0, 76, '盒', 300.0, 1.5, 1, 350, 2, 0, 0.1, 20, 'system'),
-        ('雞蛋三文治', '食物', 12.0, 1.5, 2, 250, '份', 150.0, 2, 3, 150, 30, 5, 0.3, 10, 'system'),
-        ('藍莓', '食物', 0.7, 0.3, 9.7, 57, '盒', 125.0, 2.4, 10, 6, 14, 19, 0.05, 0, 'system'),
-        ('橙', '食物', 0.9, 0.1, 53.2, 47, '個', 150.0, 2.4, 9, 40, 12, 0, 0.06, 0, 'system'),
-        ('香蕉', '食物', 1.1, 0.3, 8.7, 89, '根', 120.0, 2.6, 12, 5, 23, 0.5, 0.4, 0, 'system'),
-        ('生菜', '食物', 1.4, 0.5, 9.2, 15, '克', 1.0, 1.3, 0.8, 36, 2.9, 126, 0.1, 0, 'system'),
-        ('雨衣甘藍', '食物', 4.3, 1.6, 120, 49, '克', 1.0, 3.6, 0.4, 150, 8, 817, 0.2, 0, 'system'),
-        ('南瓜', '食物', 1.0, 0.8, 9.0, 26, '克', 1.0, 0.5, 2.8, 21, 6.5, 1.1, 0.1, 0, 'system'),
-        ('山葯', '食物', 1.9, 0.5, 17, 67, '克', 1.0, 4.1, 0.7, 17, 16, 2.3, 0.2, 0, 'system'),
-        ('紅蘿蔔', '食物', 0.9, 0.3, 5.9, 41, '根', 60.0, 2.8, 4.7, 33, 9.6, 13, 0.1, 0, 'system'),
-        ('彩椒', '食物', 1.0, 0.4, 128, 31, '個', 150.0, 1.5, 4.2, 10, 6, 4.9, 0.2, 0, 'system'),
-        ('牛油果', '食物', 2.0, 0.6, 10, 160, '個', 150.0, 6.7, 0.7, 12, 8.5, 21, 0.2, 0, 'system'),
-        ('青瓜', '食物', 0.7, 0.3, 2.8, 15, '根', 200.0, 0.5, 1.7, 16, 3.6, 16, 0.1, 0, 'system'),
-        ('小蕃茄', '食物', 0.9, 0.3, 25, 18, '粒', 15.0, 1.2, 2.5, 10, 3.9, 7, 0.1, 0, 'system'),
-        ('堅果（綜合）', '食物', 15.0, 2.5, 0, 600, '克', 1.0, 8.0, 4, 100, 20, 0, 0.3, 0, 'system'),
-        ('芝士（起司）', '食物', 25.0, 0.5, 0, 400, '片', 20.0, 0, 0.5, 700, 1.5, 0, 0.2, 30, 'system'),
-        ('牛奶', '飲品', 3.3, 0.1, 0, 62, '杯', 240.0, 0, 5, 120, 4.8, 0.3, 0.1, 40, 'system'),
-        ('豆漿', '飲品', 3.3, 0.5, 0, 54, '杯', 240.0, 0.5, 4, 25, 6, 0, 0.1, 15, 'system'),
-        ('檸檬茶', '飲品', 0.1, 0.1, 2, 35, '杯', 240.0, 0, 9, 5, 8.5, 0, 0, 0, 'system'),
-        ('檸檬水', '飲品', 0, 0, 2, 5, '杯', 240.0, 0, 1, 5, 1, 0, 0, 0, 'system'),
-        ('黑咖啡', '飲品', 0.1, 0, 0, 1, '杯', 240.0, 0, 0, 4, 0.2, 0, 0, 0, 'system'),
-        ('奶啡', '飲品', 0.8, 0, 0, 20, '杯', 240.0, 0, 2, 50, 2, 0, 0.1, 10, 'system'),
-        ('奶茶', '飲品', 0.5, 0, 0, 30, '杯', 240.0, 0, 7, 40, 6, 0, 0.1, 8, 'system'),
-        ('抹茶', '飲品', 0.3, 0.1, 2, 10, '杯', 240.0, 0.5, 0, 10, 2, 0, 0.2, 5, 'system'),
-        ('紅茶', '飲品', 0, 0, 0, 1, '杯', 240.0, 0, 0, 4, 0.2, 0, 0, 0, 'system'),
-        ('綠茶', '飲品', 0, 0, 0, 1, '杯', 240.0, 0, 0, 4, 0.2, 0, 0, 0, 'system'),
-    ]
-    cursor.executemany('''
-        INSERT INTO foods (food_name, category, protein_g_per_100g, iron_mg_per_100g, vitamin_c_mg_per_100g,
-                          calories_per_100g, common_unit, common_gram, fiber_g_per_100g, sugar_g_per_100g,
-                          calcium_mg_per_100g, carbs_g_per_100g, vitamin_k_mcg_per_100g, vitamin_b_mg_per_100g,
-                          iodine_ug_per_100g, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', foods_data)
-    conn.commit()
+def search_usda_food(query):
+    """搜尋 USDA 食物"""
+    url = "https://api.nal.usda.gov/fdc/v1/foods/search"
+    params = {
+        "api_key": USDA_API_KEY,
+        "query": query,
+        "pageSize": 3
+    }
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        results = []
+        for food in data.get("foods", []):
+            nutrients = {n["nutrientName"]: n["value"] for n in food.get("foodNutrients", [])}
+            results.append({
+                "name": food["description"],
+                "protein": nutrients.get("Protein", 0),
+                "iron": nutrients.get("Iron, Fe", 0),
+                "vitamin_c": nutrients.get("Vitamin C, total ascorbic acid", 0),
+                "calories": nutrients.get("Energy", 0)
+            })
+        return results
+    except Exception as e:
+        st.error(f"搜尋失敗：{e}")
+        return []
+
+def add_user_food(user_name, food_name, category, protein, iron, vitamin_c, calories, unit, gram):
+    """使用者新增食物"""
+    try:
+        supabase.table("foods").insert({
+            "food_name": food_name,
+            "category": category,
+            "protein_g_per_100g": float(protein),
+            "iron_mg_per_100g": float(iron),
+            "vitamin_c_mg_per_100g": float(vitamin_c),
+            "calories_per_100g": int(calories),
+            "common_unit": unit,
+            "common_gram": float(gram),
+            "created_by": user_name
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"新增失敗：{e}")
+        return False
+
+def save_feedback(user_name, fb_type, title, content, image_url):
+    """儲存留言"""
+    try:
+        supabase.table("feedbacks").insert({
+            "user_name": user_name,
+            "feedback_type": fb_type,
+            "title": title,
+            "content": content,
+            "image_url": image_url
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"送出失敗：{e}")
+        return False
+
+def get_feedbacks():
+    """取得所有留言（管理員用）"""
+    try:
+        result = supabase.table("feedbacks").select("*").order("created_at", desc=True).execute()
+        return result.data
+    except Exception as e:
+        st.error(f"讀取留言失敗：{e}")
+        return []
+
+def mark_feedback_read(feedback_id):
+    """標記留言為已讀"""
+    try:
+        supabase.table("feedbacks").update({"is_read": 1}).eq("feedback_id", feedback_id).execute()
+        return True
+    except Exception as e:
+        return False
+
+def delete_feedback(feedback_id):
+    """刪除留言"""
+    try:
+        supabase.table("feedbacks").delete().eq("feedback_id", feedback_id).execute()
+        return True
+    except Exception as e:
+        return False
 
 def calculate_bmr(gender, weight, height, age):
     if gender == "男":
@@ -164,49 +234,27 @@ def get_nutrition_goals(gender, age):
         "carbs": 250,
     }
 
-def search_usda_food(query):
-    url = "https://api.nal.usda.gov/fdc/v1/foods/search"
-    params = {
-        "api_key": USDA_API_KEY,
-        "query": query,
-        "pageSize": 3
-    }
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
-        results = []
-        for food in data.get("foods", []):
-            nutrients = {n["nutrientName"]: n["value"] for n in food.get("foodNutrients", [])}
-            results.append({
-                "name": food["description"],
-                "protein": nutrients.get("Protein", 0),
-                "iron": nutrients.get("Iron, Fe", 0),
-                "vitamin_c": nutrients.get("Vitamin C, total ascorbic acid", 0),
-                "calories": nutrients.get("Energy", 0)
-            })
-        return results
-    except Exception as e:
-        st.error(f"搜尋失敗：{e}")
-        return []
+# === 從 URL 參數讀取使用者名稱 ===
+if "user_name" not in st.session_state or not st.session_state.user_name:
+    url_name = st.query_params.get("user_name", [""])[0]
+    if url_name:
+        st.session_state.user_name = url_name
 
 # === 側邊欄 ===
 with st.sidebar:
     st.header("👤 使用者")
     
-    if "user_name" not in st.session_state:
-        st.session_state.user_name = ""
-    
-    user_name = st.text_input("你的名字", value=st.session_state.user_name)
+    user_name = st.text_input("你的名字", value=st.session_state.get("user_name", ""))
     if user_name:
         st.session_state.user_name = user_name
+        st.query_params["user_name"] = user_name
     
     st.divider()
     
     # 個人資料設定
     with st.expander("⚙️ 個人資料設定"):
-        if st.session_state.user_name:
-            cursor.execute("SELECT * FROM user_profile WHERE user_name = ?", (st.session_state.user_name,))
-            profile = cursor.fetchone()
+        if st.session_state.get("user_name"):
+            profile = get_user_profile(st.session_state.user_name)
             
             gender = st.selectbox("性別", ["男", "女"], index=0 if not profile else (0 if profile["gender"] == "男" else 1))
             age = st.number_input("年齡", min_value=15.0, max_value=120.0, value=float(profile["age"]) if profile else 30.0)
@@ -218,20 +266,18 @@ with st.sidebar:
                 "中度活動（每週運動3-5天）",
                 "高度活動（每週運動6-7天）",
                 "極高度活動（體力勞動或每天訓練兩次）"
-            ], index=0 if not profile else 0)
+            ], index=0 if not profile else [
+                "久坐（辦公室工作，幾乎不運動）",
+                "輕度活動（每週運動1-3天）",
+                "中度活動（每週運動3-5天）",
+                "高度活動（每週運動6-7天）",
+                "極高度活動（體力勞動或每天訓練兩次）"
+            ].index(profile["activity_level"]) if profile else 0)
             
-            if "save_clicked" not in st.session_state:
-                st.session_state.save_clicked = False
-            
-            if st.button("💾 儲存個人資料", type="primary" if not st.session_state.save_clicked else "secondary"):
-                cursor.execute('''
-                    INSERT OR REPLACE INTO user_profile (user_name, gender, age, height, weight, activity_level)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (st.session_state.user_name, gender, int(age), height, weight, activity_level))
-                conn.commit()
-                st.session_state.save_clicked = True
-                st.success("✅ 已儲存！")
-                st.rerun()
+            if st.button("💾 儲存個人資料", type="primary"):
+                if save_user_profile(st.session_state.user_name, gender, age, height, weight, activity_level):
+                    st.success("✅ 已儲存！")
+                    st.rerun()
             
             if profile or (user_name and age):
                 bmr = calculate_bmr(gender, weight, height, age)
@@ -265,53 +311,53 @@ with st.sidebar:
     st.divider()
     
     # 隱藏食物管理
-    if st.session_state.user_name:
+    if st.session_state.get("user_name"):
         with st.expander("🙈 隱藏不用的食物"):
             st.caption("勾選你想隱藏的食物（不會刪除，只是不顯示）")
             
-            cursor.execute("SELECT food_id, food_name, category FROM foods WHERE created_by = 'system' ORDER BY category, food_name")
-            all_system_foods = cursor.fetchall()
-            
-            cursor.execute("SELECT food_id FROM hidden_foods WHERE user_name = ?", (st.session_state.user_name,))
-            hidden_ids = set([row["food_id"] for row in cursor.fetchall()])
-            
-            col1, col2 = st.columns(2)
-            food_items = [f for f in all_system_foods if f["category"] == "食物"]
-            drink_items = [f for f in all_system_foods if f["category"] == "飲品"]
-            
-            with col1:
-                st.subheader("🥘 食物")
-                for f in food_items:
-                    is_hidden = f["food_id"] in hidden_ids
-                    if st.checkbox(f"{f['food_name']}", value=is_hidden, key=f"hide_{f['food_id']}"):
-                        if not is_hidden:
-                            cursor.execute("INSERT INTO hidden_foods (user_name, food_id) VALUES (?, ?)", (st.session_state.user_name, f["food_id"]))
-                    else:
-                        if is_hidden:
-                            cursor.execute("DELETE FROM hidden_foods WHERE user_name = ? AND food_id = ?", (st.session_state.user_name, f["food_id"]))
-            
-            with col2:
-                st.subheader("🥤 飲品")
-                for f in drink_items:
-                    is_hidden = f["food_id"] in hidden_ids
-                    if st.checkbox(f"{f['food_name']}", value=is_hidden, key=f"hide_{f['food_id']}"):
-                        if not is_hidden:
-                            cursor.execute("INSERT INTO hidden_foods (user_name, food_id) VALUES (?, ?)", (st.session_state.user_name, f["food_id"]))
-                    else:
-                        if is_hidden:
-                            cursor.execute("DELETE FROM hidden_foods WHERE user_name = ? AND food_id = ?", (st.session_state.user_name, f["food_id"]))
-            
-            if st.button("💾 儲存隱藏設定"):
-                conn.commit()
-                st.success("已儲存")
-                st.rerun()
+            try:
+                all_foods = supabase.table("foods").select("*").eq("created_by", "system").execute()
+                food_items = [f for f in all_foods.data if f["category"] == "食物"]
+                drink_items = [f for f in all_foods.data if f["category"] == "飲品"]
+                
+                hidden = supabase.table("hidden_foods").select("food_id").eq("user_name", st.session_state.user_name).execute()
+                hidden_ids = set([h["food_id"] for h in hidden.data])
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.subheader("🥘 食物")
+                    for f in food_items:
+                        is_hidden = f["food_id"] in hidden_ids
+                        if st.checkbox(f"{f['food_name']}", value=is_hidden, key=f"hide_{f['food_id']}"):
+                            if not is_hidden:
+                                toggle_hide_food(st.session_state.user_name, f["food_id"], True)
+                        else:
+                            if is_hidden:
+                                toggle_hide_food(st.session_state.user_name, f["food_id"], False)
+                
+                with col2:
+                    st.subheader("🥤 飲品")
+                    for f in drink_items:
+                        is_hidden = f["food_id"] in hidden_ids
+                        if st.checkbox(f"{f['food_name']}", value=is_hidden, key=f"hide_{f['food_id']}"):
+                            if not is_hidden:
+                                toggle_hide_food(st.session_state.user_name, f["food_id"], True)
+                        else:
+                            if is_hidden:
+                                toggle_hide_food(st.session_state.user_name, f["food_id"], False)
+                
+                if st.button("💾 儲存隱藏設定"):
+                    st.rerun()
+            except Exception as e:
+                st.error(f"讀取失敗：{e}")
     
     st.divider()
     
     # USDA 新增食物
-    if st.session_state.user_name:
+    if st.session_state.get("user_name"):
         with st.expander("🔍 從 USDA 新增食物"):
-            st.caption("搜尋英文食物名稱，可選擇加入「食物」或「飲品」")
+            st.caption("搜尋英文食物名稱")
             search_term = st.text_input("輸入英文食物名稱")
             if st.button("搜尋"):
                 if search_term:
@@ -329,110 +375,82 @@ with st.sidebar:
                         col_a, col_b = st.columns(2)
                         with col_a:
                             if st.button(f"➕ 加入食物", key=f"add_food_{i}"):
-                                cursor.execute('''
-                                    INSERT INTO foods (food_name, category, protein_g_per_100g, iron_mg_per_100g, vitamin_c_mg_per_100g,
-                                                      calories_per_100g, common_unit, common_gram, created_by)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (food['name'], '食物', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '克', 1.0, st.session_state.user_name))
-                                conn.commit()
-                                st.success(f"已加入：{food['name']}")
-                                del st.session_state.search_results
-                                st.rerun()
+                                if add_user_food(st.session_state.user_name, food['name'], '食物', 
+                                                food['protein'], food['iron'], food['vitamin_c'], 
+                                                food['calories'], '克', 1.0):
+                                    st.success(f"已加入：{food['name']}")
+                                    del st.session_state.search_results
+                                    st.rerun()
                         with col_b:
                             if st.button(f"➕ 加入飲品", key=f"add_drink_{i}"):
-                                cursor.execute('''
-                                    INSERT INTO foods (food_name, category, protein_g_per_100g, iron_mg_per_100g, vitamin_c_mg_per_100g,
-                                                      calories_per_100g, common_unit, common_gram, created_by)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (food['name'], '飲品', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '杯', 240.0, st.session_state.user_name))
-                                conn.commit()
-                                st.success(f"已加入飲品：{food['name']}")
-                                del st.session_state.search_results
-                                st.rerun()
+                                if add_user_food(st.session_state.user_name, food['name'], '飲品', 
+                                                food['protein'], food['iron'], food['vitamin_c'], 
+                                                food['calories'], '杯', 240.0):
+                                    st.success(f"已加入飲品：{food['name']}")
+                                    del st.session_state.search_results
+                                    st.rerun()
     
     st.divider()
     
     # 記錄飲食
     st.header("➕ 記錄飲食")
-    if not st.session_state.user_name:
+    if not st.session_state.get("user_name"):
         st.warning("⚠️ 請先輸入名字")
     else:
         log_date = st.date_input("日期", date.today())
         selected_category = st.radio("分類", ["食物", "飲品"], horizontal=True)
         
-        cursor.execute("""
-            SELECT f.food_id, f.food_name, f.common_unit, f.common_gram 
-            FROM foods f
-            WHERE (f.created_by = 'system' OR f.created_by = ?) 
-              AND f.category = ?
-              AND f.food_id NOT IN (SELECT food_id FROM hidden_foods WHERE user_name = ?)
-            ORDER BY f.food_name
-        """, (st.session_state.user_name, selected_category, st.session_state.user_name))
-        foods = cursor.fetchall()
+        foods = get_foods(st.session_state.user_name, selected_category)
         
         if foods:
-            food_options = {f["food_name"]: {"id": f["food_id"], "unit": f["common_unit"], "gram": f["common_gram"]} for f in foods}
+            food_options = {f["food_name"]: f for f in foods}
             selected_food_name = st.selectbox("選擇項目", list(food_options.keys()))
             selected_food = food_options[selected_food_name]
             
-            if selected_food["unit"] == "克":
+            if selected_food["common_unit"] == "克":
                 grams = st.number_input("重量 (克)", min_value=1, max_value=2000, value=100)
             else:
-                portion = st.number_input(f"份量 ({selected_food['unit']})", min_value=0.25, max_value=10.0, value=1.0, step=0.25)
-                grams = selected_food["gram"] * portion
+                portion = st.number_input(f"份量 ({selected_food['common_unit']})", min_value=0.25, max_value=10.0, value=1.0, step=0.25)
+                grams = selected_food["common_gram"] * portion
                 st.caption(f"約 {grams:.0f} 克")
             
             meal_type = st.selectbox("餐別", ["早餐", "午餐", "晚餐", "點心"])
             if st.button("📝 記錄"):
-                cursor.execute('''
-                    INSERT INTO meal_logs (user_name, log_date, meal_type, food_id, grams)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (st.session_state.user_name, log_date.strftime("%Y-%m-%d"), meal_type, selected_food["id"], grams))
-                conn.commit()
-                st.success(f"✅ 已記錄 {selected_food_name}")
-                st.rerun()
+                if save_meal_log(st.session_state.user_name, log_date, meal_type, selected_food["food_id"], grams):
+                    st.success(f"✅ 已記錄 {selected_food_name}")
+                    st.rerun()
         else:
-            st.info(f"沒有可顯示的{selected_category}，請檢查隱藏設定")
+            st.info(f"沒有可顯示的{selected_category}")
     
     st.divider()
     
-    # === 留言板 ===
+    # 留言板
     with st.expander("💬 回饋與建議"):
-        st.caption("報告 Bug 或提供建議，我會盡快處理")
+        st.caption("報告 Bug 或提供建議")
         
         fb_type = st.selectbox("類型", ["🐛 回報 Bug", "💡 功能建議", "📝 一般意見"])
         fb_title = st.text_input("標題", placeholder="簡短描述問題")
         fb_content = st.text_area("詳細內容", height=100, placeholder="請詳細描述...")
-        fb_image_url = st.text_input("圖片網址（選填）", placeholder="https://... 可上傳到 Imgur 後貼網址")
+        fb_image_url = st.text_input("圖片網址（選填）", placeholder="可貼 Imgur 圖片網址")
         
         if st.button("📨 送出回饋"):
             if fb_title and fb_content:
-                cursor.execute('''
-                    INSERT INTO feedbacks (user_name, feedback_type, title, content, image_url)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (st.session_state.user_name, fb_type, fb_title, fb_content, fb_image_url))
-                conn.commit()
-                st.success("✅ 已送出，感謝你的回饋！")
-                st.rerun()
+                if save_feedback(st.session_state.user_name, fb_type, fb_title, fb_content, fb_image_url):
+                    st.success("✅ 已送出，感謝你的回饋！")
+                    st.rerun()
             else:
                 st.warning("請填寫標題和內容")
     
-    # === 管理留言（只有特定使用者能看到）===
-    # 請把「你的名字」改成你自己的登入名字
-    if st.session_state.user_name == "你的名字":
+    # 管理留言
+    if st.session_state.get("user_name") == "Jessica Sara Lei ENFJ":  # ⚠️ 改成你的名字
         with st.expander("🔧 管理留言（僅限管理員）"):
-            st.caption("查看所有使用者的回饋")
-            
-            cursor.execute("SELECT * FROM feedbacks ORDER BY created_at DESC")
-            all_feedbacks = cursor.fetchall()
-            
-            if all_feedbacks:
-                # 顯示未讀數量
-                unread_count = len([f for f in all_feedbacks if not f["is_read"]])
+            feedbacks = get_feedbacks()
+            if feedbacks:
+                unread_count = len([f for f in feedbacks if not f["is_read"]])
                 if unread_count > 0:
                     st.warning(f"📬 有 {unread_count} 則未讀留言")
                 
-                for fb in all_feedbacks:
+                for fb in feedbacks:
                     with st.container():
                         status = "✅ 已讀" if fb["is_read"] else "🆕 未讀"
                         st.markdown(f"**{fb['feedback_type']}** | {status} | 📅 {fb['created_at'][:16]}")
@@ -445,13 +463,11 @@ with st.sidebar:
                         col1, col2 = st.columns(2)
                         with col1:
                             if not fb["is_read"] and st.button(f"📖 標記已讀", key=f"read_{fb['feedback_id']}"):
-                                cursor.execute("UPDATE feedbacks SET is_read = 1 WHERE feedback_id = ?", (fb['feedback_id'],))
-                                conn.commit()
+                                mark_feedback_read(fb['feedback_id'])
                                 st.rerun()
                         with col2:
                             if st.button(f"🗑️ 刪除", key=f"del_{fb['feedback_id']}"):
-                                cursor.execute("DELETE FROM feedbacks WHERE feedback_id = ?", (fb['feedback_id'],))
-                                conn.commit()
+                                delete_feedback(fb['feedback_id'])
                                 st.rerun()
                         st.divider()
             else:
@@ -460,35 +476,17 @@ with st.sidebar:
 # === 主畫面 ===
 st.header("📊 今日營養統計")
 
-if not st.session_state.user_name:
+if not st.session_state.get("user_name"):
     st.info("👈 請輸入名字開始（按左上角箭頭打開側邊欄）")
 else:
     view_date = st.date_input("查詢日期", date.today())
-    
-    cursor.execute('''
-        SELECT 
-            f.food_name,
-            f.category,
-            SUM(m.grams) as total_grams,
-            SUM(f.protein_g_per_100g * m.grams / 100) as protein,
-            SUM(f.iron_mg_per_100g * m.grams / 100) as iron,
-            SUM(f.vitamin_c_mg_per_100g * m.grams / 100) as vitamin_c,
-            SUM(f.fiber_g_per_100g * m.grams / 100) as fiber,
-            SUM(f.sugar_g_per_100g * m.grams / 100) as sugar,
-            SUM(f.calcium_mg_per_100g * m.grams / 100) as calcium,
-            SUM(f.carbs_g_per_100g * m.grams / 100) as carbs
-        FROM meal_logs m
-        JOIN foods f ON m.food_id = f.food_id
-        WHERE m.user_name = ? AND m.log_date = ?
-        GROUP BY f.food_name
-    ''', (st.session_state.user_name, view_date.strftime("%Y-%m-%d")))
-    today_data = cursor.fetchall()
+    stats = get_today_stats(st.session_state.user_name, view_date)
     
     st.caption(f"👤 {st.session_state.user_name} | 📅 {view_date}")
     
-    if today_data:
-        df = pd.DataFrame([dict(row) for row in today_data])
-        st.dataframe(df, use_container_width=True)
+    if stats:
+        df = pd.DataFrame(stats)
+        st.dataframe(df[["food_name", "grams", "protein", "iron", "vitamin_c"]], use_container_width=True)
         
         total_protein = df["protein"].sum()
         total_iron = df["iron"].sum()
@@ -523,10 +521,6 @@ else:
             goal_col3.metric("🍊 維生素C目標", f"{st.session_state.vitamin_c_goal:.0f} 毫克")
             goal_col4.metric("🌾 膳食纖維目標", f"{st.session_state.fiber_goal:.0f} 克")
             
-            goal_col5, goal_col6, goal_col7 = st.columns(3)
-            goal_col5.metric("🦴 鈣目標", f"{st.session_state.calcium_goal:.0f} 毫克")
-            goal_col6.metric("🍚 碳水化合物目標", f"{st.session_state.carbs_goal:.0f} 克")
-            
             st.subheader("🎯 今日進度")
             
             prog_col1, prog_col2 = st.columns(2)
@@ -560,8 +554,4 @@ else:
 
 # === 免責聲明 ===
 st.markdown("---")
-st.caption("⚠️ **免責聲明**：本應用程式之營養數據主要來自美國農業部（USDA）FoodData Central 資料庫，僅供參考與教育用途。")
-st.caption("📌 個人的營養需求可能因年齡、性別、活動量、健康狀況而異，建議諮詢專業營養師或醫師。")
-st.caption("📌 開發者不對使用本應用程式所做的任何飲食決策承擔責任。")
-
-conn.close()
+st.caption("⚠️ **免責聲明**：本應用程式之營養數據主要來自美國農業部（USDA）FoodData Central 資料庫，僅供參考。")
