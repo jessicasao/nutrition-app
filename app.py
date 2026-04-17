@@ -25,7 +25,6 @@ if "login_user_name" not in st.session_state:
 
 # === 登入/註冊函數 ===
 def login_user(user_name, password):
-    """驗證使用者密碼"""
     try:
         result = supabase.table("user_profile").select("password").eq("user_name", user_name).execute()
         if result.data and result.data[0]["password"] == password:
@@ -36,7 +35,6 @@ def login_user(user_name, password):
         return False
 
 def register_user(user_name, password, gender, age, height, weight, activity_level):
-    """註冊新使用者"""
     try:
         supabase.table("user_profile").insert({
             "user_name": user_name,
@@ -53,21 +51,20 @@ def register_user(user_name, password, gender, age, height, weight, activity_lev
         return False
 
 def user_exists(user_name):
-    """檢查使用者是否存在"""
     try:
         result = supabase.table("user_profile").select("user_name").eq("user_name", user_name).execute()
         return len(result.data) > 0
-    except Exception as e:
+    except Exception:
         return False
 
-# === 原有的輔助函數（保持不變）===
+# === 輔助函數 ===
 def get_user_profile(user_name):
     try:
         result = supabase.table("user_profile").select("*").eq("user_name", user_name).execute()
         if result.data:
             return result.data[0]
         return None
-    except Exception as e:
+    except Exception:
         return None
 
 def save_user_profile(user_name, gender, age, height, weight, activity_level):
@@ -80,7 +77,7 @@ def save_user_profile(user_name, gender, age, height, weight, activity_level):
             "activity_level": activity_level
         }).eq("user_name", user_name).execute()
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 def get_foods(user_name, category):
@@ -90,7 +87,7 @@ def get_foods(user_name, category):
         result = supabase.table("foods").select("*").eq("category", category).in_("created_by", ["system", user_name]).execute()
         foods = [f for f in result.data if f["food_id"] not in hidden_ids]
         return foods
-    except Exception as e:
+    except Exception:
         return []
 
 def save_meal_log(user_name, log_date, meal_type, food_id, grams):
@@ -103,7 +100,7 @@ def save_meal_log(user_name, log_date, meal_type, food_id, grams):
             "grams": float(grams)
         }).execute()
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 def get_today_stats(user_name, target_date):
@@ -132,7 +129,7 @@ def get_today_stats(user_name, target_date):
                 "carbs": food.get("carbs_g_per_100g", 0) * grams / 100
             })
         return stats
-    except Exception as e:
+    except Exception:
         return []
 
 def toggle_hide_food(user_name, food_id, is_hidden):
@@ -142,7 +139,7 @@ def toggle_hide_food(user_name, food_id, is_hidden):
         else:
             supabase.table("hidden_foods").delete().eq("user_name", user_name).eq("food_id", food_id).execute()
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 def search_usda_food(query):
@@ -295,7 +292,7 @@ with st.sidebar:
     
     st.divider()
 
-# === 原有的側邊欄內容（保持不變，但 user_name 改用上面的）===
+# === 原有的側邊欄內容 ===
 with st.sidebar:
     st.header(f"👤 {user_name}")
     
@@ -364,11 +361,12 @@ with st.sidebar:
             all_foods = supabase.table("foods").select("*").eq("created_by", "system").execute()
             food_items = [f for f in all_foods.data if f["category"] == "食物"]
             drink_items = [f for f in all_foods.data if f["category"] == "飲品"]
+            snack_items = [f for f in all_foods.data if f["category"] == "點心"]
             
             hidden = supabase.table("hidden_foods").select("food_id").eq("user_name", user_name).execute()
             hidden_ids = set([h["food_id"] for h in hidden.data])
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.subheader("🥘 食物")
                 for f in food_items:
@@ -382,6 +380,16 @@ with st.sidebar:
             with col2:
                 st.subheader("🥤 飲品")
                 for f in drink_items:
+                    is_hidden = f["food_id"] in hidden_ids
+                    if st.checkbox(f"{f['food_name']}", value=is_hidden, key=f"hide_{f['food_id']}"):
+                        if not is_hidden:
+                            toggle_hide_food(user_name, f["food_id"], True)
+                    else:
+                        if is_hidden:
+                            toggle_hide_food(user_name, f["food_id"], False)
+            with col3:
+                st.subheader("🍪 點心")
+                for f in snack_items:
                     is_hidden = f["food_id"] in hidden_ids
                     if st.checkbox(f"{f['food_name']}", value=is_hidden, key=f"hide_{f['food_id']}"):
                         if not is_hidden:
@@ -414,17 +422,23 @@ with st.sidebar:
             for i, food in enumerate(st.session_state.search_results):
                 with st.expander(f"{food['name'][:50]}"):
                     st.write(f"蛋白質: {food['protein']:.1f}g | 鐵: {food['iron']:.1f}mg | 維生素C: {food['vitamin_c']:.1f}mg")
-                    col_a, col_b = st.columns(2)
+                    col_a, col_b, col_c = st.columns(3)
                     with col_a:
-                        if st.button(f"➕ 加入食物", key=f"add_food_{i}"):
+                        if st.button(f"➕ 食物", key=f"add_food_{i}"):
                             if add_user_food(user_name, food['name'], '食物', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '克', 1.0):
                                 st.success(f"已加入：{food['name']}")
                                 del st.session_state.search_results
                                 st.rerun()
                     with col_b:
-                        if st.button(f"➕ 加入飲品", key=f"add_drink_{i}"):
+                        if st.button(f"🥤 飲品", key=f"add_drink_{i}"):
                             if add_user_food(user_name, food['name'], '飲品', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '杯', 240.0):
                                 st.success(f"已加入飲品：{food['name']}")
+                                del st.session_state.search_results
+                                st.rerun()
+                    with col_c:
+                        if st.button(f"🍪 點心", key=f"add_snack_{i}"):
+                            if add_user_food(user_name, food['name'], '點心', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '克', 1.0):
+                                st.success(f"已加入點心：{food['name']}")
                                 del st.session_state.search_results
                                 st.rerun()
     
@@ -433,7 +447,7 @@ with st.sidebar:
     # 記錄飲食
     st.header("➕ 記錄飲食")
     log_date = st.date_input("日期", date.today())
-    selected_category = st.radio("分類", ["食物", "飲品"], horizontal=True)
+    selected_category = st.radio("分類", ["食物", "飲品", "點心"], horizontal=True)
     
     foods = get_foods(user_name, selected_category)
     
@@ -475,7 +489,7 @@ with st.sidebar:
                 st.warning("請填寫標題和內容")
     
     # 管理留言
-    if user_name == "你的名字":
+    if user_name == "Jessica Sara Lei ENFJ":
         with st.expander("🔧 管理留言（僅限管理員）"):
             feedbacks = get_feedbacks()
             if feedbacks:
@@ -550,6 +564,10 @@ if stats:
         goal_col2.metric("🩸 鐵目標", f"{st.session_state.iron_goal:.0f} 毫克")
         goal_col3.metric("🍊 維生素C目標", f"{st.session_state.vitamin_c_goal:.0f} 毫克")
         goal_col4.metric("🌾 膳食纖維目標", f"{st.session_state.fiber_goal:.0f} 克")
+        
+        goal_col5, goal_col6, goal_col7 = st.columns(3)
+        goal_col5.metric("🦴 鈣目標", f"{st.session_state.calcium_goal:.0f} 毫克")
+        goal_col6.metric("🍚 碳水化合物目標", f"{st.session_state.carbs_goal:.0f} 克")
         
         st.subheader("🎯 今日進度")
         
