@@ -7,23 +7,25 @@ from supabase import create_client, Client
 st.set_page_config(page_title="營養計算器", page_icon="🍎")
 st.title("🍎 每日營養計算器")
 
-# === 你的 Supabase 設定 ===
-SUPABASE_URL = "https://qpdtdwpvsjsrfueyhwfq.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwZHRkd3B2c2pzcmZ1ZXlod2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc3MjMsImV4cCI6MjA5MTg5MzcyM30.Ncn2-DhoRA41CsSy8qg0u8oKlwPIbFX3NpttTC8kKKg"
+# === 使用 Secrets 讀取金鑰 ===
+SUPABASE_URL = st.secrets["supabase"]["url"]
+SUPABASE_KEY = st.secrets["supabase"]["key"]
+USDA_API_KEY = st.secrets["usda"]["api_key"]
 
 # 初始化 Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# === 你的 USDA API Key ===
-USDA_API_KEY = "M3DXYo47JeVwPjPI6UVHq9zei9YNPqx6Vtnrhsfh"
 
 # === 登入狀態管理 ===
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "login_user_name" not in st.session_state:
     st.session_state.login_user_name = ""
+if "log_date" not in st.session_state:
+    st.session_state.log_date = date.today()
+if "view_date" not in st.session_state:
+    st.session_state.view_date = date.today()
 
-# === 登入/註冊函數 ===
+# === 登入/註冊函數（明碼）===
 def login_user(user_name, password):
     try:
         result = supabase.table("user_profile").select("password").eq("user_name", user_name).execute()
@@ -156,19 +158,24 @@ def search_usda_food(query):
                 "protein": nutrients.get("Protein", 0),
                 "iron": nutrients.get("Iron, Fe", 0),
                 "vitamin_c": nutrients.get("Vitamin C, total ascorbic acid", 0),
-                "calories": nutrients.get("Energy", 0)
+                "calories": nutrients.get("Energy", 0),
+                "fiber": nutrients.get("Fiber, total dietary", 0),
+                "calcium": nutrients.get("Calcium, Ca", 0),
+                "carbs": nutrients.get("Carbohydrate, by difference", 0)
             })
         return results
     except Exception:
         return []
 
-def add_user_food(user_name, food_name, category, protein, iron, vitamin_c, calories, unit, gram):
+def add_user_food(user_name, food_name, category, protein, iron, vitamin_c, calories, unit, gram, fiber=0, calcium=0, carbs=0):
     try:
         supabase.table("foods").insert({
             "food_name": food_name, "category": category,
             "protein_g_per_100g": float(protein), "iron_mg_per_100g": float(iron),
             "vitamin_c_mg_per_100g": float(vitamin_c), "calories_per_100g": int(calories),
-            "common_unit": unit, "common_gram": float(gram), "created_by": user_name
+            "common_unit": unit, "common_gram": float(gram), "created_by": user_name,
+            "fiber_g_per_100g": float(fiber), "calcium_mg_per_100g": float(calcium),
+            "carbs_g_per_100g": float(carbs)
         }).execute()
         return True
     except Exception:
@@ -283,7 +290,7 @@ if not st.session_state.logged_in:
 # === 已登入後的 APP 內容 ===
 user_name = st.session_state.login_user_name
 
-# 側邊欄登出按鈕
+# 側邊欄
 with st.sidebar:
     if st.button("🚪 登出"):
         st.session_state.logged_in = False
@@ -291,11 +298,7 @@ with st.sidebar:
         st.rerun()
     
     st.divider()
-
-# === 原有的側邊欄內容 ===
-with st.sidebar:
     st.header(f"👤 {user_name}")
-    
     st.divider()
     
     # 個人資料設定
@@ -363,6 +366,15 @@ with st.sidebar:
             drink_items = [f for f in all_foods.data if f["category"] == "飲品"]
             snack_items = [f for f in all_foods.data if f["category"] == "點心"]
             
+            user_foods = supabase.table("foods").select("*").eq("created_by", user_name).execute()
+            for f in user_foods.data:
+                if f["category"] == "食物" and f not in food_items:
+                    food_items.append(f)
+                elif f["category"] == "飲品" and f not in drink_items:
+                    drink_items.append(f)
+                elif f["category"] == "點心" and f not in snack_items:
+                    snack_items.append(f)
+            
             hidden = supabase.table("hidden_foods").select("food_id").eq("user_name", user_name).execute()
             hidden_ids = set([h["food_id"] for h in hidden.data])
             
@@ -422,22 +434,23 @@ with st.sidebar:
             for i, food in enumerate(st.session_state.search_results):
                 with st.expander(f"{food['name'][:50]}"):
                     st.write(f"蛋白質: {food['protein']:.1f}g | 鐵: {food['iron']:.1f}mg | 維生素C: {food['vitamin_c']:.1f}mg")
+                    st.write(f"膳食纖維: {food['fiber']:.1f}g | 鈣: {food['calcium']:.0f}mg | 碳水化合物: {food['carbs']:.1f}g")
                     col_a, col_b, col_c = st.columns(3)
                     with col_a:
                         if st.button(f"➕ 食物", key=f"add_food_{i}"):
-                            if add_user_food(user_name, food['name'], '食物', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '克', 1.0):
+                            if add_user_food(user_name, food['name'], '食物', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '克', 1.0, food['fiber'], food['calcium'], food['carbs']):
                                 st.success(f"已加入：{food['name']}")
                                 del st.session_state.search_results
                                 st.rerun()
                     with col_b:
                         if st.button(f"🥤 飲品", key=f"add_drink_{i}"):
-                            if add_user_food(user_name, food['name'], '飲品', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '杯', 240.0):
+                            if add_user_food(user_name, food['name'], '飲品', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '杯', 240.0, food['fiber'], food['calcium'], food['carbs']):
                                 st.success(f"已加入飲品：{food['name']}")
                                 del st.session_state.search_results
                                 st.rerun()
                     with col_c:
                         if st.button(f"🍪 點心", key=f"add_snack_{i}"):
-                            if add_user_food(user_name, food['name'], '點心', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '克', 1.0):
+                            if add_user_food(user_name, food['name'], '點心', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '克', 1.0, food['fiber'], food['calcium'], food['carbs']):
                                 st.success(f"已加入點心：{food['name']}")
                                 del st.session_state.search_results
                                 st.rerun()
@@ -446,7 +459,10 @@ with st.sidebar:
     
     # 記錄飲食
     st.header("➕ 記錄飲食")
-    log_date = st.date_input("日期", date.today())
+    
+    log_date = st.date_input("記錄日期", value=st.session_state.log_date, key="log_date_picker")
+    st.session_state.log_date = log_date
+    
     selected_category = st.radio("分類", ["食物", "飲品", "點心"], horizontal=True)
     
     foods = get_foods(user_name, selected_category)
@@ -464,9 +480,11 @@ with st.sidebar:
             st.caption(f"約 {grams:.0f} 克")
         
         meal_type = st.selectbox("餐別", ["早餐", "午餐", "晚餐", "點心"])
+        
         if st.button("📝 記錄"):
             if save_meal_log(user_name, log_date, meal_type, selected_food["food_id"], grams):
-                st.success(f"✅ 已記錄 {selected_food_name}")
+                st.success(f"✅ 已記錄 {selected_food_name} 到 {log_date}")
+                st.session_state.view_date = log_date
                 st.rerun()
     else:
         st.info(f"沒有可顯示的{selected_category}")
@@ -523,14 +541,16 @@ with st.sidebar:
 # === 主畫面 ===
 st.header("📊 今日營養統計")
 
-view_date = st.date_input("查詢日期", date.today())
+view_date = st.date_input("查詢日期", value=st.session_state.view_date, key="view_date_picker")
+st.session_state.view_date = view_date
+
 stats = get_today_stats(user_name, view_date)
 
 st.caption(f"👤 {user_name} | 📅 {view_date}")
 
 if stats:
     df = pd.DataFrame(stats)
-    st.dataframe(df[["food_name", "grams", "protein", "iron", "vitamin_c"]], use_container_width=True)
+    st.dataframe(df[["food_name", "grams", "protein", "iron", "vitamin_c", "fiber", "calcium", "carbs"]], use_container_width=True)
     
     total_protein = df["protein"].sum()
     total_iron = df["iron"].sum()
