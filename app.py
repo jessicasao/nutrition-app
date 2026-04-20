@@ -234,28 +234,17 @@ def get_nutrition_goals(gender, age):
 # === 登入/註冊畫面 ===
 # === 登入/註冊畫面 ===
 if not st.session_state.logged_in:
-    # === 介紹文字（版本三：極簡版）===
     st.markdown("""
-    <div style="background-color: #f0fdf4; padding: 1.5rem; border-radius: 1rem; margin-bottom: 2rem; text-align: center;">
-        <h1 style="color: #166534; margin-bottom: 0.5rem;">🥗 原型食物計算器</h1>
-        <p style="color: #14532d; font-size: 1rem; margin-bottom: 1rem;">
-        只算原型食物，不算加工食品。
-        </p>
-        <p style="color: #166534; font-size: 0.9rem;">
-        想知道每天吃的營養夠不夠？<br>
-        蛋白質？鐵？維生素C？膳食纖維？
-        </p>
-        <p style="color: #15803d; font-weight: bold;">
-        這裡有答案。
-        </p>
-        <hr style="margin: 1rem 0;">
-        <p style="color: #166534; font-size: 0.85rem;">
-        👇 開始使用 👇
-        </p>
+    <div style="background-color: #f0fdf4; padding: 1.5rem; border-radius: 1rem; margin-bottom: 1rem; text-align: center;">
+        <h1 style="color: #166534;">🥗 原型食物計算器</h1>
+        <p>只算原型食物，不算加工食品。</p>
+        <p>想知道每天吃的營養夠不夠？<br>蛋白質？鐵？維生素C？膳食纖維？</p>
+        <p><strong>這裡有答案。</strong></p>
     </div>
     """, unsafe_allow_html=True)
     
-    st.divider()
+    # 加入 Email 聯絡資訊
+    st.info("📧 忘記密碼？請來信：chinescha@gmail.com，我會協助你重設")
     
     tab1, tab2 = st.tabs(["🔐 登入", "📝 註冊"])
     
@@ -271,11 +260,12 @@ if not st.session_state.logged_in:
                     st.success(f"歡迎回來，{login_name}！")
                     st.rerun()
                 else:
-                    st.error("登入錯誤，請聯絡管理員（忘記密碼可私訊我）")
+                    st.error("登入錯誤，請聯絡管理員：chinescha@gmail.com")
             else:
                 st.warning("請輸入名字和密碼")
     
     with tab2:
+        # 註冊畫面保持不變
         reg_name = st.text_input("名字", key="reg_name")
         reg_password = st.text_input("密碼", type="password", key="reg_password")
         reg_password_confirm = st.text_input("確認密碼", type="password", key="reg_password_confirm")
@@ -308,7 +298,6 @@ if not st.session_state.logged_in:
                 st.warning("請填寫名字和密碼")
     
     st.stop()
-
 # === 已登入後的 APP 內容 ===
 user_name = st.session_state.login_user_name
 
