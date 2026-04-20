@@ -234,6 +234,7 @@ def get_nutrition_goals(gender, age):
 # === 登入/註冊畫面 ===
 # === 登入/註冊畫面 ===
 if not st.session_state.logged_in:
+    # 介紹文字
     st.markdown("""
     <div style="background-color: #f0fdf4; padding: 1.5rem; border-radius: 1rem; margin-bottom: 1rem; text-align: center;">
         <h1 style="color: #166534;">🥗 原型食物計算器</h1>
@@ -243,61 +244,85 @@ if not st.session_state.logged_in:
     </div>
     """, unsafe_allow_html=True)
     
-    # 加入 Email 聯絡資訊
+    # 聯絡資訊
     st.info("📧 忘記密碼？請來信：chinescha@gmail.com，我會協助你重設")
     
-    tab1, tab2 = st.tabs(["🔐 登入", "📝 註冊"])
+    # 控制預設顯示哪個分頁
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = "登入"
     
-    with tab1:
-        login_name = st.text_input("名字", key="login_name")
-        login_password = st.text_input("密碼", type="password", key="login_password")
-        
-        if st.button("登入", type="primary"):
-            if login_name and login_password:
-                if login_user(login_name, login_password):
-                    st.session_state.logged_in = True
-                    st.session_state.login_user_name = login_name
-                    st.success(f"歡迎回來，{login_name}！")
-                    st.rerun()
-                else:
-                    st.error("登入錯誤，請聯絡管理員：chinescha@gmail.com")
-            else:
-                st.warning("請輸入名字和密碼")
+    # 自訂分頁切換按鈕
+    col_tab1, col_tab2 = st.columns(2)
+    with col_tab1:
+        if st.button("🔐 登入", use_container_width=True, type="primary" if st.session_state.active_tab == "登入" else "secondary"):
+            st.session_state.active_tab = "登入"
+            st.rerun()
+    with col_tab2:
+        if st.button("📝 註冊", use_container_width=True, type="primary" if st.session_state.active_tab == "註冊" else "secondary"):
+            st.session_state.active_tab = "註冊"
+            st.rerun()
     
-    with tab2:
-        # 註冊畫面保持不變
-        reg_name = st.text_input("名字", key="reg_name")
-        reg_password = st.text_input("密碼", type="password", key="reg_password")
-        reg_password_confirm = st.text_input("確認密碼", type="password", key="reg_password_confirm")
-        
-        reg_gender = st.selectbox("性別", ["男", "女"])
-        reg_age = st.number_input("年齡", min_value=15, max_value=120, value=30)
-        reg_height = st.number_input("身高 (公分)", min_value=100, max_value=250, value=170)
-        reg_weight = st.number_input("體重 (公斤)", min_value=30, max_value=200, value=65)
-        reg_activity = st.selectbox("活動量", [
-            "久坐（辦公室工作，幾乎不運動）",
-            "輕度活動（每週運動1-3天）",
-            "中度活動（每週運動3-5天）",
-            "高度活動（每週運動6-7天）",
-            "極高度活動（體力勞動或每天訓練兩次）"
-        ])
-        
-        if st.button("註冊", type="primary"):
-            if reg_name and reg_password:
-                if reg_password != reg_password_confirm:
-                    st.error("兩次密碼輸入不一致")
-                elif user_exists(reg_name):
-                    st.error("這個名字已經被註冊了，請改用其他名字")
-                else:
-                    if register_user(reg_name, reg_password, reg_gender, reg_age, reg_height, reg_weight, reg_activity):
-                        st.success(f"註冊成功！請用你的密碼登入")
+    st.divider()
+    
+    # === 登入分頁 ===
+    if st.session_state.active_tab == "登入":
+        with st.container():
+            login_name = st.text_input("名字", key="login_name")
+            login_password = st.text_input("密碼", type="password", key="login_password")
+            
+            if st.button("登入", type="primary"):
+                if login_name and login_password:
+                    if login_user(login_name, login_password):
+                        st.session_state.logged_in = True
+                        st.session_state.login_user_name = login_name
+                        st.success(f"歡迎回來，{login_name}！")
                         st.rerun()
                     else:
-                        st.error("註冊失敗，請稍後再試")
-            else:
-                st.warning("請填寫名字和密碼")
+                        st.error("登入錯誤，請聯絡管理員：chinescha@gmail.com")
+                else:
+                    st.warning("請輸入名字和密碼")
+    
+    # === 註冊分頁 ===
+    else:
+        with st.container():
+            reg_name = st.text_input("名字", key="reg_name")
+            reg_password = st.text_input("密碼", type="password", key="reg_password")
+            reg_password_confirm = st.text_input("確認密碼", type="password", key="reg_password_confirm")
+            
+            reg_gender = st.selectbox("性別", ["男", "女"])
+            reg_age = st.number_input("年齡", min_value=15, max_value=120, value=30)
+            reg_height = st.number_input("身高 (公分)", min_value=100, max_value=250, value=170)
+            reg_weight = st.number_input("體重 (公斤)", min_value=30, max_value=200, value=65)
+            reg_activity = st.selectbox("活動量", [
+                "久坐（辦公室工作，幾乎不運動）",
+                "輕度活動（每週運動1-3天）",
+                "中度活動（每週運動3-5天）",
+                "高度活動（每週運動6-7天）",
+                "極高度活動（體力勞動或每天訓練兩次）"
+            ])
+            
+            if st.button("註冊", type="primary"):
+                if reg_name and reg_password:
+                    if reg_password != reg_password_confirm:
+                        st.error("兩次密碼輸入不一致")
+                    elif user_exists(reg_name):
+                        st.error("這個名字已經被註冊了，請改用其他名字")
+                    else:
+                        if register_user(reg_name, reg_password, reg_gender, reg_age, reg_height, reg_weight, reg_activity):
+                            st.success("✅ 註冊成功！")
+                            st.balloons()
+                            st.session_state.active_tab = "登入"
+                            st.rerun()
+                        else:
+                            st.error("註冊失敗，請稍後再試")
+                else:
+                    st.warning("請填寫名字和密碼")
     
     st.stop()
+              
+
+
+
 # === 已登入後的 APP 內容 ===
 user_name = st.session_state.login_user_name
 
