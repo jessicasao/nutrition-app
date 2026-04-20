@@ -573,8 +573,32 @@ with st.sidebar:
                         st.divider()
             else:
                 st.info("目前沒有留言")
+# === 主畫面 ===
+# 只在手機上顯示的提示
+st.markdown("""
+<style>
+@media screen and (max-width: 768px) {
+    .mobile-only {
+        display: block;
+    }
+}
+@media screen and (min-width: 769px) {
+    .mobile-only {
+        display: none;
+    }
+}
+</style>
+<div class="mobile-only" style="background-color: #e0f2fe; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; text-align: center; border-left: 4px solid #0284c7;">
+    📱 點擊左上角「☰」或「>」打開側邊欄
+</div>
+""", unsafe_allow_html=True)
+
+
+# ... 後面你的原有程式碼
+
 
 # === 主畫面 ===
+
 st.header("📊 今日營養統計")
 
 view_date = st.date_input("查詢日期", value=st.session_state.view_date, key="view_date_picker")
