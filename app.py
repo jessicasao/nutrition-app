@@ -5,7 +5,7 @@ from datetime import date
 from supabase import create_client, Client
 
 st.set_page_config(page_title="營養計算器", page_icon="🍎")
-st.title("🍎 每日營養計算器")
+# st.title("🍎 每日營養計算器")
 
 # === 使用 Secrets 讀取金鑰 ===
 SUPABASE_URL = st.secrets["supabase"]["url"]
@@ -232,10 +232,32 @@ def get_nutrition_goals(gender, age):
     return {"protein_per_kg": 1.1, "iron_male": 10, "iron_female": 15, "vitamin_c": 100, "fiber": 25, "calcium": 1000, "carbs": 250}
 
 # === 登入/註冊畫面 ===
+# === 登入/註冊畫面 ===
 if not st.session_state.logged_in:
-    st.header("🔐 登入或註冊")
+    # === 介紹文字（版本三：極簡版）===
+    st.markdown("""
+    <div style="background-color: #f0fdf4; padding: 1.5rem; border-radius: 1rem; margin-bottom: 2rem; text-align: center;">
+        <h1 style="color: #166534; margin-bottom: 0.5rem;">🥗 原型食物計算器</h1>
+        <p style="color: #14532d; font-size: 1rem; margin-bottom: 1rem;">
+        只算原型食物，不算加工食品。
+        </p>
+        <p style="color: #166534; font-size: 0.9rem;">
+        想知道每天吃的營養夠不夠？<br>
+        蛋白質？鐵？維生素C？膳食纖維？
+        </p>
+        <p style="color: #15803d; font-weight: bold;">
+        這裡有答案。
+        </p>
+        <hr style="margin: 1rem 0;">
+        <p style="color: #166534; font-size: 0.85rem;">
+        👇 開始使用 👇
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["登入", "註冊"])
+    st.divider()
+    
+    tab1, tab2 = st.tabs(["🔐 登入", "📝 註冊"])
     
     with tab1:
         login_name = st.text_input("名字", key="login_name")
