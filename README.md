@@ -1,10 +1,10 @@
-# 🥑 WholeFood Tracker
+# 🥑 WholeFood Dairy
 
 > 一個專注計算「原型食物」營養的 Web APP
 
 🔗 **線上試用**：https://nutrition-food-app.streamlit.app/
 
-📂 **GitHub**：https://github.com/你的帳號/nutrition-app
+📂 **GitHub**：https://github.com/jessicasao/nutrition-app
 
 ---
 
