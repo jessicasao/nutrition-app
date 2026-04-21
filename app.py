@@ -488,7 +488,7 @@ with st.sidebar:
     log_date = st.date_input("記錄日期", value=st.session_state.log_date, key="log_date_picker")
     st.session_state.log_date = log_date
     
-    selected_category = st.radio("分類", ["食物", "飲品", "點心"], horizontal=True)
+    selected_category = st.radio("分類", ["食物", "蔬果", "點心", "飲品"], horizontal=True)
     
     foods = get_foods(user_name, selected_category)
     
