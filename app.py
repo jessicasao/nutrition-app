@@ -443,8 +443,9 @@ with st.sidebar:
     st.divider()
     
     # USDA 新增食物
-    with st.expander("🔍 從 USDA 新增食物"):
-        st.caption("搜尋英文食物名稱")
+       # 自訂食物清單
+    with st.expander("📝 自訂你的食物清單"):
+        st.caption("搜尋英文食物名稱（資料來源：USDA 美國農業部）")
         search_term = st.text_input("輸入英文食物名稱")
         if st.button("搜尋"):
             if search_term:
