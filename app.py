@@ -231,9 +231,6 @@ def calculate_tdee(bmr, activity_level):
 def get_nutrition_goals(gender, age):
     return {"protein_per_kg": 1.1, "iron_male": 10, "iron_female": 15, "vitamin_c": 100, "fiber": 25, "calcium": 1000, "carbs": 250}
 
-
-# ... 前面的程式碼（函數、Supabase設定等）...
-
 # === 自動登入檢查 ===
 if not st.session_state.logged_in:
     auto_login = st.query_params.get("auto_login", [""])[0]
@@ -241,9 +238,6 @@ if not st.session_state.logged_in:
         st.session_state.logged_in = True
         st.session_state.login_user_name = auto_login
         st.rerun()
-
-
-
 
 # === 登入/註冊畫面 ===
 if not st.session_state.logged_in:
@@ -277,12 +271,15 @@ if not st.session_state.logged_in:
         with st.container():
             login_name = st.text_input("名字", key="login_name")
             login_password = st.text_input("密碼", type="password", key="login_password")
+            remember_me = st.checkbox("記住我（30天內自動登入）")
             
             if st.button("登入", type="primary"):
                 if login_name and login_password:
                     if login_user(login_name, login_password):
                         st.session_state.logged_in = True
                         st.session_state.login_user_name = login_name
+                        if remember_me:
+                            st.query_params["auto_login"] = login_name
                         st.success(f"歡迎回來，{login_name}！")
                         st.rerun()
                     else:
@@ -456,8 +453,7 @@ with st.sidebar:
     
     st.divider()
     
-    # USDA 新增食物
-       # 自訂食物清單
+    # 自訂食物清單
     with st.expander("📝 自訂你的食物清單"):
         st.caption("搜尋英文食物名稱（資料來源：USDA 美國農業部）")
         search_term = st.text_input("輸入英文食物名稱")
@@ -603,7 +599,6 @@ st.header("📊 今日營養統計")
 view_date = st.date_input("查詢日期", value=st.session_state.view_date, key="view_date_picker")
 st.session_state.view_date = view_date
 
-# 重要：這裡定義 stats 變數
 stats = get_today_stats(user_name, view_date)
 
 st.markdown("---")
