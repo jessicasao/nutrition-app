@@ -25,7 +25,7 @@ if "log_date" not in st.session_state:
 if "view_date" not in st.session_state:
     st.session_state.view_date = date.today()
 
-# === 登入/註冊函數（明碼）===
+# === 登入/註冊函數 ===
 def login_user(user_name, password):
     try:
         result = supabase.table("user_profile").select("password").eq("user_name", user_name).execute()
@@ -232,9 +232,7 @@ def get_nutrition_goals(gender, age):
     return {"protein_per_kg": 1.1, "iron_male": 10, "iron_female": 15, "vitamin_c": 100, "fiber": 25, "calcium": 1000, "carbs": 250}
 
 # === 登入/註冊畫面 ===
-# === 登入/註冊畫面 ===
 if not st.session_state.logged_in:
-    # 介紹文字
     st.markdown("""
     <div style="background-color: #f0fdf4; padding: 1.5rem; border-radius: 1rem; margin-bottom: 1rem; text-align: center;">
         <h1 style="color: #166534;">🥗 原型食物計算器</h1>
@@ -244,14 +242,11 @@ if not st.session_state.logged_in:
     </div>
     """, unsafe_allow_html=True)
     
-    # 聯絡資訊
     st.info("📧 忘記密碼？請來信：chinescha@gmail.com，我會協助你重設")
     
-    # 控制預設顯示哪個分頁
     if "active_tab" not in st.session_state:
         st.session_state.active_tab = "登入"
     
-    # 自訂分頁切換按鈕
     col_tab1, col_tab2 = st.columns(2)
     with col_tab1:
         if st.button("🔐 登入", use_container_width=True, type="primary" if st.session_state.active_tab == "登入" else "secondary"):
@@ -264,7 +259,6 @@ if not st.session_state.logged_in:
     
     st.divider()
     
-    # === 登入分頁 ===
     if st.session_state.active_tab == "登入":
         with st.container():
             login_name = st.text_input("名字", key="login_name")
@@ -281,8 +275,6 @@ if not st.session_state.logged_in:
                         st.error("登入錯誤，請聯絡管理員：chinescha@gmail.com")
                 else:
                     st.warning("請輸入名字和密碼")
-    
-    # === 註冊分頁 ===
     else:
         with st.container():
             reg_name = st.text_input("名字", key="reg_name")
@@ -319,9 +311,6 @@ if not st.session_state.logged_in:
                     st.warning("請填寫名字和密碼")
     
     st.stop()
-              
-
-
 
 # === 已登入後的 APP 內容 ===
 user_name = st.session_state.login_user_name
@@ -573,6 +562,7 @@ with st.sidebar:
                         st.divider()
             else:
                 st.info("目前沒有留言")
+
 # === 主畫面 ===
 # 只在手機上顯示的提示
 st.markdown("""
@@ -593,20 +583,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-
-# ... 後面你的原有程式碼
-
-
-# === 主畫面 ===
-
 st.header("📊 今日營養統計")
 
 view_date = st.date_input("查詢日期", value=st.session_state.view_date, key="view_date_picker")
 st.session_state.view_date = view_date
 
+# 重要：這裡定義 stats 變數
 stats = get_today_stats(user_name, view_date)
 
-st.caption(f"👤 {user_name} | 📅 {view_date}")
+st.markdown("---")
+st.caption(f"👤 使用者：{user_name}")
+st.caption(f"🔍 查詢日期：{view_date}")
+st.markdown("---")
 
 if stats:
     df = pd.DataFrame(stats)
