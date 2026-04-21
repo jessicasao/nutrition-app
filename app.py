@@ -231,6 +231,20 @@ def calculate_tdee(bmr, activity_level):
 def get_nutrition_goals(gender, age):
     return {"protein_per_kg": 1.1, "iron_male": 10, "iron_female": 15, "vitamin_c": 100, "fiber": 25, "calcium": 1000, "carbs": 250}
 
+
+# ... 前面的程式碼（函數、Supabase設定等）...
+
+# === 自動登入檢查 ===
+if not st.session_state.logged_in:
+    auto_login = st.query_params.get("auto_login", [""])[0]
+    if auto_login:
+        st.session_state.logged_in = True
+        st.session_state.login_user_name = auto_login
+        st.rerun()
+
+
+
+
 # === 登入/註冊畫面 ===
 if not st.session_state.logged_in:
     st.markdown("""
