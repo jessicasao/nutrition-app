@@ -4,15 +4,387 @@ import requests
 from datetime import date
 from supabase import create_client, Client
 
-st.set_page_config(page_title="營養計算器", page_icon="🍎")
-# st.title("🍎 每日營養計算器")
+st.set_page_config(page_title="WholeFood Tracker", page_icon="🍎")
+
+# === 語言設定 ===
+if "language" not in st.session_state:
+    st.session_state.language = "zh"
+
+# ==================== 語言字典 ====================
+TEXT = {
+    "zh": {
+        "stats_title": "📊 今日營養統計",
+        "query_date": "🔍 查詢日期",
+        "no_record": "📭 還沒有記錄",
+        "today_intake": "📈 今日攝取量",
+        "protein": "🥩 蛋白質",
+        "iron": "🩸 鐵",
+        "vitamin_c": "🍊 維生素C",
+        "fiber": "🌾 膳食纖維",
+        "sugar": "🍬 糖",
+        "calcium": "🦴 鈣",
+        "carbs": "🍚 碳水化合物",
+        "daily_goal": "📌 以下是根據你的個人資料計算的每日攝取目標",
+        "progress": "🎯 今日進度",
+        
+        "logout": "🚪 登出",
+        "profile_settings": "⚙️ 個人資料設定",
+        "gender_male": "男",
+        "gender_female": "女",
+        "age": "年齡",
+        "height": "身高 (公分)",
+        "weight": "體重 (公斤)",
+        "activity_level": "活動量",
+        "activity_1": "久坐（辦公室工作，幾乎不運動）",
+        "activity_2": "輕度活動（每週運動1-3天）",
+        "activity_3": "中度活動（每週運動3-5天）",
+        "activity_4": "高度活動（每週運動6-7天）",
+        "activity_5": "極高度活動（體力勞動或每天訓練兩次）",
+        "save": "💾 儲存個人資料",
+        "saved": "✅ 已儲存！",
+        "daily_calories": "🔥 每日熱量",
+        "protein_goal": "🥩 蛋白質目標",
+        "iron_goal": "🩸 鐵目標",
+        "vitamin_c_goal": "🍊 維生素C目標",
+        "fiber_goal": "🌾 膳食纖維目標",
+        "calcium_goal": "🦴 鈣目標",
+        "carbs_goal": "🍚 碳水化合物目標",
+        
+        "hide_foods": "🙈 隱藏不用的食物",
+        "hide_caption": "勾選你想隱藏的食物",
+        "food_category": "🥘 食物",
+        "drink_category": "🥤 飲品",
+        "snack_category": "🍪 點心",
+        "save_hide": "💾 儲存隱藏設定",
+        
+        "custom_foods": "📝 自訂你的食物清單",
+        "custom_caption": "搜尋英文食物名稱（資料來源：USDA 美國農業部）",
+        "search_placeholder": "輸入英文食物名稱",
+        "search_btn": "搜尋",
+        "searching": "搜尋中...",
+        "not_found": "找不到",
+        "add_food": "➕ 食物",
+        "add_drink": "🥤 飲品",
+        "add_snack": "🍪 點心",
+        "added": "已加入",
+        
+        "nutrition_helper": "💡 營養小幫手",
+        "select_nutrient": "選擇你想補充的營養素",
+        "iron_tip": "🩸 想補鐵？",
+        "calcium_tip": "🦴 想補鈣？",
+        "protein_tip": "🥩 想補蛋白質？",
+        "vitamin_c_tip": "🍊 想補維生素C？",
+        "iron_warning": "💡 茶和咖啡會抓住鐵，讓鐵排出體外",
+        
+        "record_title": "➕ 記錄飲食",
+        "record_date": "記錄日期",
+        "category_food": "食物",
+        "category_vegfruit": "蔬果",
+        "category_snack": "點心",
+        "category_drink": "飲品",
+        "select_item": "選擇項目",
+        "grams": "重量 (克)",
+        "portion": "份量",
+        "about_grams": "約",
+        "meal_type": "餐別",
+        "breakfast": "早餐",
+        "lunch": "午餐",
+        "dinner": "晚餐",
+        "snack": "點心",
+        "record_btn": "📝 記錄",
+        "recorded": "✅ 已記錄",
+        "no_items": "沒有可顯示的",
+        
+        "feedback": "💬 回饋與建議",
+        "feedback_type": "類型",
+        "bug": "🐛 回報 Bug",
+        "suggestion": "💡 功能建議",
+        "general": "📝 一般意見",
+        "title": "標題",
+        "content": "詳細內容",
+        "image_url": "圖片網址（選填）",
+        "submit": "📨 送出回饋",
+        "submitted": "✅ 已送出，感謝你的回饋！",
+        "fill_title": "請填寫標題和內容",
+        
+        "admin": "🔧 管理留言（僅限管理員）",
+        "unread": "📬 有 {} 則未讀留言",
+        "mark_read": "📖 標記已讀",
+        "delete": "🗑️ 刪除",
+        "no_feedback": "目前沒有留言",
+        
+        "login_register": "🔐 登入或註冊",
+        "login_tab": "🔐 登入",
+        "register_tab": "📝 註冊",
+        "username": "名字",
+        "password": "密碼",
+        "confirm_password": "確認密碼",
+        "remember_me": "記住我（30天內自動登入）",
+        "login_btn": "登入",
+        "register_btn": "註冊",
+        "welcome_back": "歡迎回來，{}！",
+        "login_error": "登入錯誤，請聯絡管理員：chinescha@gmail.com",
+        "fill_username_password": "請輸入名字和密碼",
+        "password_mismatch": "兩次密碼輸入不一致",
+        "user_exists": "這個名字已經被註冊了，請改用其他名字",
+        "register_success": "✅ 註冊成功！",
+        "register_failed": "註冊失敗，請稍後再試",
+        "fill_username_password_reg": "請填寫名字和密碼",
+        "forgot_password": "📧 忘記密碼？請來信：chinescha@gmail.com，我會協助你重設",
+        
+        "mobile_tip": "📱 點擊左上角「☰」或「>」打開側邊欄",
+        "disclaimer": "⚠️ **免責聲明**：本應用程式之營養數據主要來自美國農業部（USDA）FoodData Central 資料庫，僅供參考。",
+        
+        "iron_foods": """
+**推薦食物**（每100g含量）：
+- 🥩 豬肝：11mg
+- 🥩 牛肉：2.6mg
+- 🥬 菠菜：2.7mg
+- 🥬 紅莧菜：11.8mg
+- 🥚 蛋黃：5.5mg
+- 🌰 黑芝麻：10.5mg
+- 🦐 蝦皮：12mg
+
+**⚠️ 注意事項**：
+- 搭配維生素C（如橙、奇異果）幫助吸收
+- 鈣會干擾鐵吸收，避免高鈣食物同時吃
+""",
+        "calcium_foods": """
+**推薦食物**（每100g含量）：
+- 🥛 牛奶：120mg
+- 🧀 起司：700mg
+- 🥬 芥藍菜：180mg
+- 🥬 雨衣甘藍：150mg
+- 🥚 雞蛋：50mg
+- 🐟 小魚干：2200mg
+- 🌰 黑芝麻：975mg
+
+**⚠️ 注意事項**：
+- 搭配維生素D（曬太陽）幫助吸收
+- 咖啡、茶、可樂會影響鈣吸收
+- 分次吃比一次吃效果好
+""",
+        "protein_foods": """
+**推薦食物**（每100g含量）：
+- 🍗 雞胸肉：31g
+- 🥩 牛肉：26g
+- 🐟 鮭魚：20g
+- 🥚 雞蛋：12.6g
+- 🥛 牛奶：3.3g
+- 🥬 毛豆：11g
+- 🥬 豆腐：8.1g
+
+**⚠️ 注意事項**：
+- 平均分配在三餐，吸收效果更好
+- 運動後30分鐘內補充，幫助肌肉修復
+- 植物性蛋白（豆類）和動物性蛋白交替吃
+""",
+        "vitaminc_foods": """
+**推薦食物**（每100g含量）：
+- 🥝 奇異果：92mg
+- 🍊 橙：53mg
+- 🥬 雨衣甘藍：120mg
+- 🫑 彩椒：128mg
+- 🥦 綠花椰菜：89mg
+- 🍓 草莓：59mg
+- 🍅 小蕃茄：25mg
+
+**⚠️ 注意事項**：
+- 維生素C怕熱，生吃或快炒最好
+- 幫助鐵質吸收（補鐵時搭配吃）
+- 幫助膠原蛋白生成
+""",
+    },
+    "en": {
+        "stats_title": "📊 Today's Nutrition Stats",
+        "query_date": "🔍 Query Date",
+        "no_record": "📭 No records yet",
+        "today_intake": "📈 Today's Intake",
+        "protein": "🥩 Protein",
+        "iron": "🩸 Iron",
+        "vitamin_c": "🍊 Vitamin C",
+        "fiber": "🌾 Fiber",
+        "sugar": "🍬 Sugar",
+        "calcium": "🦴 Calcium",
+        "carbs": "🍚 Carbs",
+        "daily_goal": "📌 Daily nutrition goals based on your profile",
+        "progress": "🎯 Today's Progress",
+        
+        "logout": "🚪 Logout",
+        "profile_settings": "⚙️ Profile Settings",
+        "gender_male": "Male",
+        "gender_female": "Female",
+        "age": "Age",
+        "height": "Height (cm)",
+        "weight": "Weight (kg)",
+        "activity_level": "Activity Level",
+        "activity_1": "Sedentary (office job, little exercise)",
+        "activity_2": "Light (exercise 1-3 days/week)",
+        "activity_3": "Moderate (exercise 3-5 days/week)",
+        "activity_4": "Active (exercise 6-7 days/week)",
+        "activity_5": "Very Active (physical labor or twice daily training)",
+        "save": "💾 Save Profile",
+        "saved": "✅ Saved!",
+        "daily_calories": "🔥 Daily Calories",
+        "protein_goal": "🥩 Protein Goal",
+        "iron_goal": "🩸 Iron Goal",
+        "vitamin_c_goal": "🍊 Vitamin C Goal",
+        "fiber_goal": "🌾 Fiber Goal",
+        "calcium_goal": "🦴 Calcium Goal",
+        "carbs_goal": "🍚 Carbs Goal",
+        
+        "hide_foods": "🙈 Hide Unused Foods",
+        "hide_caption": "Check foods you want to hide",
+        "food_category": "🥘 Food",
+        "drink_category": "🥤 Drink",
+        "snack_category": "🍪 Snack",
+        "save_hide": "💾 Save Hide Settings",
+        
+        "custom_foods": "📝 Custom Food List",
+        "custom_caption": "Search English food name (Source: USDA FoodData Central)",
+        "search_placeholder": "Enter English food name",
+        "search_btn": "Search",
+        "searching": "Searching...",
+        "not_found": "Not found",
+        "add_food": "➕ Food",
+        "add_drink": "🥤 Drink",
+        "add_snack": "🍪 Snack",
+        "added": "Added",
+        
+        "nutrition_helper": "💡 Nutrition Helper",
+        "select_nutrient": "Select nutrient",
+        "iron_tip": "🩸 Want more Iron?",
+        "calcium_tip": "🦴 Want more Calcium?",
+        "protein_tip": "🥩 Want more Protein?",
+        "vitamin_c_tip": "🍊 Want more Vitamin C?",
+        "iron_warning": "💡 Tea and coffee can reduce iron absorption",
+        
+        "record_title": "➕ Log Food",
+        "record_date": "Date",
+        "category_food": "Food",
+        "category_vegfruit": "Veg/Fruit",
+        "category_snack": "Snack",
+        "category_drink": "Drink",
+        "select_item": "Select item",
+        "grams": "Weight (g)",
+        "portion": "Portion",
+        "about_grams": "approx",
+        "meal_type": "Meal",
+        "breakfast": "Breakfast",
+        "lunch": "Lunch",
+        "dinner": "Dinner",
+        "snack": "Snack",
+        "record_btn": "📝 Log",
+        "recorded": "✅ Logged",
+        "no_items": "No items to show",
+        
+        "feedback": "💬 Feedback",
+        "feedback_type": "Type",
+        "bug": "🐛 Bug Report",
+        "suggestion": "💡 Feature Suggestion",
+        "general": "📝 General",
+        "title": "Title",
+        "content": "Content",
+        "image_url": "Image URL (optional)",
+        "submit": "📨 Submit",
+        "submitted": "✅ Submitted, thank you!",
+        "fill_title": "Please fill in title and content",
+        
+        "admin": "🔧 Manage Feedback (Admin only)",
+        "unread": "📬 {} unread messages",
+        "mark_read": "📖 Mark as read",
+        "delete": "🗑️ Delete",
+        "no_feedback": "No feedback yet",
+        
+        "login_register": "🔐 Login or Register",
+        "login_tab": "🔐 Login",
+        "register_tab": "📝 Register",
+        "username": "Username",
+        "password": "Password",
+        "confirm_password": "Confirm Password",
+        "remember_me": "Remember me (30 days auto-login)",
+        "login_btn": "Login",
+        "register_btn": "Register",
+        "welcome_back": "Welcome back, {}!",
+        "login_error": "Login error, please contact: chinescha@gmail.com",
+        "fill_username_password": "Please enter username and password",
+        "password_mismatch": "Passwords do not match",
+        "user_exists": "This username is already taken",
+        "register_success": "✅ Registration successful!",
+        "register_failed": "Registration failed, please try again",
+        "fill_username_password_reg": "Please enter username and password",
+        "forgot_password": "📧 Forgot password? Email: chinescha@gmail.com",
+        
+        "mobile_tip": "📱 Click the arrow in the top-left corner to open the sidebar",
+        "disclaimer": "⚠️ **Disclaimer**: Nutrition data from USDA FoodData Central database. For reference only.",
+        
+        "iron_foods": """
+**Recommended Foods** (per 100g):
+- 🥩 Pork Liver: 11mg
+- 🥩 Beef: 2.6mg
+- 🥬 Spinach: 2.7mg
+- 🥬 Red Amaranth: 11.8mg
+- 🥚 Egg Yolk: 5.5mg
+- 🌰 Black Sesame: 10.5mg
+- 🦐 Dried Shrimp: 12mg
+
+**⚠️ Tips**:
+- Pair with Vitamin C (oranges, kiwi) for better absorption
+- Calcium interferes with iron absorption
+""",
+        "calcium_foods": """
+**Recommended Foods** (per 100g):
+- 🥛 Milk: 120mg
+- 🧀 Cheese: 700mg
+- 🥬 Kale: 150mg
+- 🥬 Chinese Broccoli: 180mg
+- 🥚 Egg: 50mg
+- 🐟 Small Dried Fish: 2200mg
+- 🌰 Black Sesame: 975mg
+
+**⚠️ Tips**:
+- Pair with Vitamin D (sunlight) for better absorption
+- Coffee, tea, soda reduce calcium absorption
+""",
+        "protein_foods": """
+**Recommended Foods** (per 100g):
+- 🍗 Chicken Breast: 31g
+- 🥩 Beef: 26g
+- 🐟 Salmon: 20g
+- 🥚 Egg: 12.6g
+- 🥛 Milk: 3.3g
+- 🥬 Edamame: 11g
+- 🥬 Tofu: 8.1g
+
+**⚠️ Tips**:
+- Spread protein intake throughout the day
+- Consume within 30 min post-workout
+""",
+        "vitaminc_foods": """
+**Recommended Foods** (per 100g):
+- 🥝 Kiwi: 92mg
+- 🍊 Orange: 53mg
+- 🥬 Kale: 120mg
+- 🫑 Bell Pepper: 128mg
+- 🥦 Broccoli: 89mg
+- 🍓 Strawberry: 59mg
+- 🍅 Cherry Tomato: 25mg
+
+**⚠️ Tips**:
+- Vitamin C is heat sensitive, eat raw or quick-cook
+- Helps iron absorption
+""",
+    }
+}
+
+def t(key):
+    return TEXT[st.session_state.language].get(key, key)
 
 # === 使用 Secrets 讀取金鑰 ===
 SUPABASE_URL = st.secrets["supabase"]["url"]
 SUPABASE_KEY = st.secrets["supabase"]["key"]
 USDA_API_KEY = st.secrets["usda"]["api_key"]
 
-# 初始化 Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # === 登入狀態管理 ===
@@ -33,7 +405,7 @@ def login_user(user_name, password):
             return True
         return False
     except Exception as e:
-        st.error(f"登入錯誤：{e}")
+        st.error(f"Login error: {e}")
         return False
 
 def register_user(user_name, password, gender, age, height, weight, activity_level):
@@ -49,7 +421,7 @@ def register_user(user_name, password, gender, age, height, weight, activity_lev
         }).execute()
         return True
     except Exception as e:
-        st.error(f"註冊失敗：{e}")
+        st.error(f"Registration error: {e}")
         return False
 
 def user_exists(user_name):
@@ -240,86 +612,88 @@ if not st.session_state.logged_in:
         st.rerun()
 
 # === 登入/註冊畫面 ===
+
+  # === 登入/註冊畫面 ===
 if not st.session_state.logged_in:
     st.markdown("""
     <div style="background-color: #f0fdf4; padding: 1.5rem; border-radius: 1rem; margin-bottom: 1rem; text-align: center;">
-        <h1 style="color: #166534;">🥗 原型食物計算器</h1>
-        <p>只算原型食物，不算加工食品。</p>
-        <p>想知道每天吃的營養夠不夠？<br>蛋白質？鐵？維生素C？膳食纖維？</p>
-        <p><strong>這裡有答案。</strong></p>
+        <h1 style="color: #166534;">🥗 WholeFood Tracker</h1>
+        <p>Whole foods only, no processed foods.</p>
+        <p>Want to know if you're getting enough nutrition?<br>Protein? Iron? Vitamin C? Fiber?</p>
+        <p><strong>You'll find the answer here.</strong></p>
     </div>
     """, unsafe_allow_html=True)
     
-    st.info("📧 忘記密碼？請來信：chinescha@gmail.com，我會協助你重設")
+    st.info("📧 Forgot password? Email: chinescha@gmail.com")
     
     if "active_tab" not in st.session_state:
-        st.session_state.active_tab = "登入"
+        st.session_state.active_tab = "login"
     
     col_tab1, col_tab2 = st.columns(2)
     with col_tab1:
-        if st.button("🔐 登入", use_container_width=True, type="primary" if st.session_state.active_tab == "登入" else "secondary"):
-            st.session_state.active_tab = "登入"
+        if st.button("🔐 Login", use_container_width=True, type="primary" if st.session_state.active_tab == "login" else "secondary"):
+            st.session_state.active_tab = "login"
             st.rerun()
     with col_tab2:
-        if st.button("📝 註冊", use_container_width=True, type="primary" if st.session_state.active_tab == "註冊" else "secondary"):
-            st.session_state.active_tab = "註冊"
+        if st.button("📝 Register", use_container_width=True, type="primary" if st.session_state.active_tab == "register" else "secondary"):
+            st.session_state.active_tab = "register"
             st.rerun()
     
     st.divider()
     
-    if st.session_state.active_tab == "登入":
+    if st.session_state.active_tab == "login":
         with st.container():
-            login_name = st.text_input("名字", key="login_name")
-            login_password = st.text_input("密碼", type="password", key="login_password")
-            remember_me = st.checkbox("記住我（30天內自動登入）")
+            login_name = st.text_input("Username", key="login_name")
+            login_password = st.text_input("Password", type="password", key="login_password")
+            remember_me = st.checkbox("Remember me (30 days auto-login)")
             
-            if st.button("登入", type="primary"):
+            if st.button("Login", type="primary"):
                 if login_name and login_password:
                     if login_user(login_name, login_password):
                         st.session_state.logged_in = True
                         st.session_state.login_user_name = login_name
                         if remember_me:
                             st.query_params["auto_login"] = login_name
-                        st.success(f"歡迎回來，{login_name}！")
+                        st.success(f"Welcome back, {login_name}!")
                         st.rerun()
                     else:
-                        st.error("登入錯誤，請聯絡管理員：chinescha@gmail.com")
+                        st.error("Login error, please contact: chinescha@gmail.com")
                 else:
-                    st.warning("請輸入名字和密碼")
+                    st.warning("Please enter username and password")
     else:
         with st.container():
-            reg_name = st.text_input("名字", key="reg_name")
-            reg_password = st.text_input("密碼", type="password", key="reg_password")
-            reg_password_confirm = st.text_input("確認密碼", type="password", key="reg_password_confirm")
+            reg_name = st.text_input("Username", key="reg_name")
+            reg_password = st.text_input("Password", type="password", key="reg_password")
+            reg_password_confirm = st.text_input("Confirm Password", type="password", key="reg_password_confirm")
             
-            reg_gender = st.selectbox("性別", ["男", "女"])
-            reg_age = st.number_input("年齡", min_value=15, max_value=120, value=30)
-            reg_height = st.number_input("身高 (公分)", min_value=100, max_value=250, value=170)
-            reg_weight = st.number_input("體重 (公斤)", min_value=30, max_value=200, value=65)
-            reg_activity = st.selectbox("活動量", [
-                "久坐（辦公室工作，幾乎不運動）",
-                "輕度活動（每週運動1-3天）",
-                "中度活動（每週運動3-5天）",
-                "高度活動（每週運動6-7天）",
-                "極高度活動（體力勞動或每天訓練兩次）"
+            reg_gender = st.selectbox("Gender", ["Male", "Female"])
+            reg_age = st.number_input("Age", min_value=15, max_value=120, value=30)
+            reg_height = st.number_input("Height (cm)", min_value=100, max_value=250, value=170)
+            reg_weight = st.number_input("Weight (kg)", min_value=30, max_value=200, value=65)
+            reg_activity = st.selectbox("Activity Level", [
+                "Sedentary (office job, little exercise)",
+                "Light (exercise 1-3 days/week)",
+                "Moderate (exercise 3-5 days/week)",
+                "Active (exercise 6-7 days/week)",
+                "Very Active (physical labor or twice daily training)"
             ])
             
-            if st.button("註冊", type="primary"):
+            if st.button("Register", type="primary"):
                 if reg_name and reg_password:
                     if reg_password != reg_password_confirm:
-                        st.error("兩次密碼輸入不一致")
+                        st.error("Passwords do not match")
                     elif user_exists(reg_name):
-                        st.error("這個名字已經被註冊了，請改用其他名字")
+                        st.error("This username is already taken")
                     else:
                         if register_user(reg_name, reg_password, reg_gender, reg_age, reg_height, reg_weight, reg_activity):
-                            st.success("✅ 註冊成功！")
+                            st.success("✅ Registration successful!")
                             st.balloons()
-                            st.session_state.active_tab = "登入"
+                            st.session_state.active_tab = "login"
                             st.rerun()
                         else:
-                            st.error("註冊失敗，請稍後再試")
+                            st.error("Registration failed, please try again")
                 else:
-                    st.warning("請填寫名字和密碼")
+                    st.warning("Please enter username and password")
     
     st.stop()
 
@@ -328,61 +702,68 @@ user_name = st.session_state.login_user_name
 
 # 側邊欄
 with st.sidebar:
-    if st.button("🚪 登出"):
+    # 語言切換（只有登入後才顯示）
+    col_lang1, col_lang2 = st.columns(2)
+    with col_lang1:
+        if st.button("🌐 中文", use_container_width=True, type="primary" if st.session_state.language == "zh" else "secondary"):
+            st.session_state.language = "zh"
+            st.rerun()
+    with col_lang2:
+        if st.button("🌐 English", use_container_width=True, type="primary" if st.session_state.language == "en" else "secondary"):
+            st.session_state.language = "en"
+            st.rerun()
+    
+    st.divider()
+    
+    if st.button(t("logout")):
         st.session_state.logged_in = False
         st.session_state.login_user_name = ""
         st.rerun()
+    
+
     
     st.divider()
     st.header(f"👤 {user_name}")
     st.divider()
     
     # 個人資料設定
-    with st.expander("⚙️ 個人資料設定"):
+    with st.expander(t("profile_settings")):
         profile = get_user_profile(user_name)
         
-        gender = st.selectbox("性別", ["男", "女"], index=0 if not profile else (0 if profile["gender"] == "男" else 1))
-        age = st.number_input("年齡", min_value=15.0, max_value=120.0, value=float(profile["age"]) if profile else 30.0)
-        height = st.number_input("身高 (公分)", min_value=100.0, max_value=250.0, value=float(profile["height"]) if profile else 170.0)
-        weight = st.number_input("體重 (公斤)", min_value=30.0, max_value=200.0, value=float(profile["weight"]) if profile else 65.0)
-        activity_level = st.selectbox("活動量", [
-            "久坐（辦公室工作，幾乎不運動）",
-            "輕度活動（每週運動1-3天）",
-            "中度活動（每週運動3-5天）",
-            "高度活動（每週運動6-7天）",
-            "極高度活動（體力勞動或每天訓練兩次）"
-        ], index=0 if not profile else [
-            "久坐（辦公室工作，幾乎不運動）",
-            "輕度活動（每週運動1-3天）",
-            "中度活動（每週運動3-5天）",
-            "高度活動（每週運動6-7天）",
-            "極高度活動（體力勞動或每天訓練兩次）"
-        ].index(profile["activity_level"]) if profile else 0)
+        gender = st.selectbox(t("gender"), [t("gender_male"), t("gender_female")], index=0 if not profile else (0 if profile["gender"] == "男" else 1))
+        age = st.number_input(t("age"), min_value=15.0, max_value=120.0, value=float(profile["age"]) if profile else 30.0)
+        height = st.number_input(t("height"), min_value=100.0, max_value=250.0, value=float(profile["height"]) if profile else 170.0)
+        weight = st.number_input(t("weight"), min_value=30.0, max_value=200.0, value=float(profile["weight"]) if profile else 65.0)
+        activity_level = st.selectbox(t("activity_level"), [
+            t("activity_1"), t("activity_2"), t("activity_3"), t("activity_4"), t("activity_5")
+        ], index=0 if not profile else 0)
         
-        if st.button("💾 儲存個人資料", type="primary"):
-            if save_user_profile(user_name, gender, age, height, weight, activity_level):
-                st.success("✅ 已儲存！")
+        if st.button(t("save"), type="primary"):
+            gender_val = "男" if gender == t("gender_male") else "女"
+            if save_user_profile(user_name, gender_val, age, height, weight, activity_level):
+                st.success(t("saved"))
                 st.rerun()
         
         if profile or (user_name and age):
-            bmr = calculate_bmr(gender, weight, height, age)
+            gender_val = "男" if gender == t("gender_male") else "女"
+            bmr = calculate_bmr(gender_val, weight, height, age)
             tdee = calculate_tdee(bmr, activity_level)
-            goals = get_nutrition_goals(gender, age)
+            goals = get_nutrition_goals(gender_val, age)
             protein_goal = weight * goals["protein_per_kg"]
-            iron_goal = goals["iron_female"] if gender == "女" else goals["iron_male"]
+            iron_goal = goals["iron_female"] if gender_val == "女" else goals["iron_male"]
             vitamin_c_goal = goals["vitamin_c"]
             fiber_goal = goals["fiber"]
             calcium_goal = goals["calcium"]
             carbs_goal = goals["carbs"]
             
             st.divider()
-            st.metric("🔥 每日熱量", f"{int(tdee)} 大卡")
-            st.metric("🥩 蛋白質目標", f"{protein_goal:.0f} 克")
-            st.metric("🩸 鐵目標", f"{iron_goal:.0f} 毫克")
-            st.metric("🍊 維生素C目標", f"{vitamin_c_goal:.0f} 毫克")
-            st.metric("🌾 膳食纖維目標", f"{fiber_goal:.0f} 克")
-            st.metric("🦴 鈣目標", f"{calcium_goal:.0f} 毫克")
-            st.metric("🍚 碳水化合物目標", f"{carbs_goal:.0f} 克")
+            st.metric(t("daily_calories"), f"{int(tdee)} kcal")
+            st.metric(t("protein_goal"), f"{protein_goal:.0f} g")
+            st.metric(t("iron_goal"), f"{iron_goal:.0f} mg")
+            st.metric(t("vitamin_c_goal"), f"{vitamin_c_goal:.0f} mg")
+            st.metric(t("fiber_goal"), f"{fiber_goal:.0f} g")
+            st.metric(t("calcium_goal"), f"{calcium_goal:.0f} mg")
+            st.metric(t("carbs_goal"), f"{carbs_goal:.0f} g")
             
             st.session_state.protein_goal = protein_goal
             st.session_state.iron_goal = iron_goal
@@ -394,8 +775,8 @@ with st.sidebar:
     st.divider()
     
     # 隱藏食物管理
-    with st.expander("🙈 隱藏不用的食物"):
-        st.caption("勾選你想隱藏的食物")
+    with st.expander(t("hide_foods")):
+        st.caption(t("hide_caption"))
         try:
             all_foods = supabase.table("foods").select("*").eq("created_by", "system").execute()
             food_items = [f for f in all_foods.data if f["category"] == "食物"]
@@ -416,7 +797,7 @@ with st.sidebar:
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.subheader("🥘 食物")
+                st.subheader(t("food_category"))
                 for f in food_items:
                     is_hidden = f["food_id"] in hidden_ids
                     if st.checkbox(f"{f['food_name']}", value=is_hidden, key=f"hide_{f['food_id']}"):
@@ -426,7 +807,7 @@ with st.sidebar:
                         if is_hidden:
                             toggle_hide_food(user_name, f["food_id"], False)
             with col2:
-                st.subheader("🥤 飲品")
+                st.subheader(t("drink_category"))
                 for f in drink_items:
                     is_hidden = f["food_id"] in hidden_ids
                     if st.checkbox(f"{f['food_name']}", value=is_hidden, key=f"hide_{f['food_id']}"):
@@ -436,7 +817,7 @@ with st.sidebar:
                         if is_hidden:
                             toggle_hide_food(user_name, f["food_id"], False)
             with col3:
-                st.subheader("🍪 點心")
+                st.subheader(t("snack_category"))
                 for f in snack_items:
                     is_hidden = f["food_id"] in hidden_ids
                     if st.checkbox(f"{f['food_name']}", value=is_hidden, key=f"hide_{f['food_id']}"):
@@ -446,252 +827,203 @@ with st.sidebar:
                         if is_hidden:
                             toggle_hide_food(user_name, f["food_id"], False)
             
-            if st.button("💾 儲存隱藏設定"):
+            if st.button(t("save_hide")):
                 st.rerun()
         except Exception as e:
-            st.error(f"讀取失敗：{e}")
+            st.error(f"Error: {e}")
     
     st.divider()
     
     # 自訂食物清單
-    with st.expander("📝 自訂你的食物清單"):
-        st.caption("搜尋英文食物名稱（資料來源：USDA 美國農業部）")
-        search_term = st.text_input("輸入英文食物名稱")
-        if st.button("搜尋"):
+    with st.expander(t("custom_foods")):
+        st.caption(t("custom_caption"))
+        search_term = st.text_input(t("search_placeholder"))
+        if st.button(t("search_btn")):
             if search_term:
-                with st.spinner("搜尋中..."):
+                with st.spinner(t("searching")):
                     results = search_usda_food(search_term)
                     if results:
                         st.session_state.search_results = results
                     else:
-                        st.warning("找不到")
+                        st.warning(t("not_found"))
         
         if "search_results" in st.session_state:
             for i, food in enumerate(st.session_state.search_results):
                 with st.expander(f"{food['name'][:50]}"):
-                    st.write(f"蛋白質: {food['protein']:.1f}g | 鐵: {food['iron']:.1f}mg | 維生素C: {food['vitamin_c']:.1f}mg")
-                    st.write(f"膳食纖維: {food['fiber']:.1f}g | 鈣: {food['calcium']:.0f}mg | 碳水化合物: {food['carbs']:.1f}g")
+                    st.write(f"{t('protein')}: {food['protein']:.1f}g | {t('iron')}: {food['iron']:.1f}mg | {t('vitamin_c')}: {food['vitamin_c']:.1f}mg")
+                    st.write(f"{t('fiber')}: {food['fiber']:.1f}g | {t('calcium')}: {food['calcium']:.0f}mg | {t('carbs')}: {food['carbs']:.1f}g")
                     col_a, col_b, col_c = st.columns(3)
                     with col_a:
-                        if st.button(f"➕ 食物", key=f"add_food_{i}"):
+                        if st.button(f"{t('add_food')}", key=f"add_food_{i}"):
                             if add_user_food(user_name, food['name'], '食物', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '克', 1.0, food['fiber'], food['calcium'], food['carbs']):
-                                st.success(f"已加入：{food['name']}")
+                                st.success(f"{t('added')}：{food['name']}")
                                 del st.session_state.search_results
                                 st.rerun()
                     with col_b:
-                        if st.button(f"🥤 飲品", key=f"add_drink_{i}"):
+                        if st.button(f"{t('add_drink')}", key=f"add_drink_{i}"):
                             if add_user_food(user_name, food['name'], '飲品', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '杯', 240.0, food['fiber'], food['calcium'], food['carbs']):
-                                st.success(f"已加入飲品：{food['name']}")
+                                st.success(f"{t('added')}：{food['name']}")
                                 del st.session_state.search_results
                                 st.rerun()
                     with col_c:
-                        if st.button(f"🍪 點心", key=f"add_snack_{i}"):
+                        if st.button(f"{t('add_snack')}", key=f"add_snack_{i}"):
                             if add_user_food(user_name, food['name'], '點心', food['protein'], food['iron'], food['vitamin_c'], food['calories'], '克', 1.0, food['fiber'], food['calcium'], food['carbs']):
-                                st.success(f"已加入點心：{food['name']}")
+                                st.success(f"{t('added')}：{food['name']}")
                                 del st.session_state.search_results
                                 st.rerun()
     
     st.divider()
     
-          # === 營養小幫手 ===
-    with st.expander("💡 營養你要知"):
-        st.caption("選擇你想補充的營養素")
+    # === 營養小幫手 ===
+    with st.expander(t("nutrition_helper")):
+        st.caption(t("select_nutrient"))
         
-        # 下拉選單
         nutrient = st.selectbox(
-            "選擇營養素",
-            ["🩸 鐵", "🦴 鈣", "🥩 蛋白質", "🍊 維生素C"]
+            t("select_nutrient"),
+            ["🩸 Iron", "🦴 Calcium", "🥩 Protein", "🍊 Vitamin C"]
         )
         
         st.markdown("---")
         
-        # 根據選擇顯示內容
-        if nutrient == "🩸 鐵":
-            st.subheader("🩸 想補鐵？")
-            st.markdown("""
-            **推薦食物**（每100g含量）：
-            - 🥩 豬肝：11mg
-            - 🥩 牛肉：2.6mg
-            - 🥬 菠菜：2.7mg
-            - 🥬 紅莧菜：11.8mg
-            - 🥚 蛋黃：5.5mg
-            - 🌰 黑芝麻：10.5mg
-            - 🦐 蝦皮：12mg
-            
-            <span style="color: gray; font-size: 0.8rem;">💡 茶和咖啡會抓住鐵，讓鐵排出體外</span>
-            
-            **⚠️ 注意事項**：
-            - 搭配維生素C（如橙、奇異果）幫助吸收
-            - 鈣會干擾鐵吸收，避免高鈣食物同時吃
-            """, unsafe_allow_html=True)
-        
-        elif nutrient == "🦴 鈣":
-            st.subheader("🦴 想補鈣？")
-            st.markdown("""
-            **推薦食物**（每100g含量）：
-            - 🥛 牛奶：120mg
-            - 🧀 起司：700mg
-            - 🥬 芥藍菜：180mg
-            - 🥬 雨衣甘藍：150mg
-            - 🥚 雞蛋：50mg
-            - 🐟 小魚干：2200mg
-            - 🌰 黑芝麻：975mg
-            
-            **⚠️ 注意事項**：
-            - 搭配維生素D（曬太陽）幫助吸收
-            - 咖啡、茶、可樂會影響鈣吸收
-            - 分次吃比一次吃效果好
-            """)
-        
-        elif nutrient == "🥩 蛋白質":
-            st.subheader("🥩 想補蛋白質？")
-            st.markdown("""
-            **推薦食物**（每100g含量）：
-            - 🍗 雞胸肉：31g
-            - 🥩 牛肉：26g
-            - 🐟 鮭魚：20g
-            - 🥚 雞蛋：12.6g
-            - 🥛 牛奶：3.3g
-            - 🥬 毛豆：11g
-            - 🥬 豆腐：8.1g
-            
-            **⚠️ 注意事項**：
-            - 平均分配在三餐，吸收效果更好
-            - 運動後30分鐘內補充，幫助肌肉修復
-            - 植物性蛋白（豆類）和動物性蛋白交替吃
-            """)
-        
-        elif nutrient == "🍊 維生素C":
-            st.subheader("🍊 想補維生素C？")
-            st.markdown("""
-            **推薦食物**（每100g含量）：
-            - 🥝 奇異果：92mg
-            - 🍊 橙：53mg
-            - 🥬 雨衣甘藍：120mg
-            - 🫑 彩椒：128mg
-            - 🥦 綠花椰菜：89mg
-            - 🍓 草莓：59mg
-            - 🍅 小蕃茄：25mg
-            
-            **⚠️ 注意事項**：
-            - 維生素C怕熱，生吃或快炒最好
-            - 幫助鐵質吸收（補鐵時搭配吃）
-            - 幫助膠原蛋白生成
-            """)
-     
-
-
-    # 記錄飲食
-    st.header("➕ 記錄飲食")
+        if nutrient == "🩸 Iron":
+            st.subheader(t("iron_tip"))
+            st.markdown(t("iron_foods"))
+            st.markdown(f'<span style="color: gray; font-size: 0.8rem;">{t("iron_warning")}</span>', unsafe_allow_html=True)
+        elif nutrient == "🦴 Calcium":
+            st.subheader(t("calcium_tip"))
+            st.markdown(t("calcium_foods"))
+        elif nutrient == "🥩 Protein":
+            st.subheader(t("protein_tip"))
+            st.markdown(t("protein_foods"))
+        elif nutrient == "🍊 Vitamin C":
+            st.subheader(t("vitamin_c_tip"))
+            st.markdown(t("vitaminc_foods"))
     
-    log_date = st.date_input("記錄日期", value=st.session_state.log_date, key="log_date_picker")
+    st.divider()
+    
+    # 記錄飲食
+    st.header(t("record_title"))
+    
+    log_date = st.date_input(t("record_date"), value=st.session_state.log_date, key="log_date_picker")
     st.session_state.log_date = log_date
     
-    selected_category = st.radio("分類", ["食物", "蔬果", "點心", "飲品"], horizontal=True)
+    selected_category = st.radio(t("category"), [t("category_food"), t("category_vegfruit"), t("category_snack"), t("category_drink")], horizontal=True)
     
-    foods = get_foods(user_name, selected_category)
+    # 映射分類到資料庫值
+    category_map = {
+        t("category_food"): "食物",
+        t("category_vegfruit"): "蔬果",
+        t("category_snack"): "點心",
+        t("category_drink"): "飲品"
+    }
+    db_category = category_map[selected_category]
+    
+    foods = get_foods(user_name, db_category)
     
     if foods:
         food_options = {f["food_name"]: f for f in foods}
-        selected_food_name = st.selectbox("選擇項目", list(food_options.keys()))
+        selected_food_name = st.selectbox(t("select_item"), list(food_options.keys()))
         selected_food = food_options[selected_food_name]
         
         if selected_food["common_unit"] == "克":
-            grams = st.number_input("重量 (克)", min_value=1, max_value=2000, value=100)
+            grams = st.number_input(t("grams"), min_value=1, max_value=2000, value=100)
         else:
-            portion = st.number_input(f"份量 ({selected_food['common_unit']})", min_value=0.25, max_value=10.0, value=1.0, step=0.25)
+            portion = st.number_input(f"{t('portion')} ({selected_food['common_unit']})", min_value=0.25, max_value=10.0, value=1.0, step=0.25)
             grams = selected_food["common_gram"] * portion
-            st.caption(f"約 {grams:.0f} 克")
+            st.caption(f"{t('about_grams')} {grams:.0f} {t('grams')}")
         
-        meal_type = st.selectbox("餐別", ["早餐", "午餐", "晚餐", "點心"])
+        meal_type = st.selectbox(t("meal_type"), [t("breakfast"), t("lunch"), t("dinner"), t("snack")])
         
-        if st.button("📝 記錄"):
-            if save_meal_log(user_name, log_date, meal_type, selected_food["food_id"], grams):
-                st.success(f"✅ 已記錄 {selected_food_name} 到 {log_date}")
+        # 映射餐別
+        meal_map = {t("breakfast"): "早餐", t("lunch"): "午餐", t("dinner"): "晚餐", t("snack"): "點心"}
+        
+        if st.button(t("record_btn")):
+            if save_meal_log(user_name, log_date, meal_map[meal_type], selected_food["food_id"], grams):
+                st.success(f"{t('recorded')} {selected_food_name} {t('to')} {log_date}")
                 st.session_state.view_date = log_date
                 st.rerun()
     else:
-        st.info(f"沒有可顯示的{selected_category}")
+        st.info(f"{t('no_items')} {selected_category}")
     
     st.divider()
     
     # 留言板
-    with st.expander("💬 回饋與建議"):
-        fb_type = st.selectbox("類型", ["🐛 回報 Bug", "💡 功能建議", "📝 一般意見"])
-        fb_title = st.text_input("標題", placeholder="簡短描述問題")
-        fb_content = st.text_area("詳細內容", height=100, placeholder="請詳細描述...")
-        fb_image_url = st.text_input("圖片網址（選填）", placeholder="可貼 Imgur 圖片網址")
+    with st.expander(t("feedback")):
+        fb_type = st.selectbox(t("feedback_type"), [t("bug"), t("suggestion"), t("general")])
+        fb_title = st.text_input(t("title"), placeholder=t("title"))
+        fb_content = st.text_area(t("content"), height=100, placeholder=t("content"))
+        fb_image_url = st.text_input(t("image_url"), placeholder="https://...")
         
-        if st.button("📨 送出回饋"):
+        if st.button(t("submit")):
             if fb_title and fb_content:
                 if save_feedback(user_name, fb_type, fb_title, fb_content, fb_image_url):
-                    st.success("✅ 已送出，感謝你的回饋！")
+                    st.success(t("submitted"))
                     st.rerun()
             else:
-                st.warning("請填寫標題和內容")
+                st.warning(t("fill_title"))
     
     # 管理留言
     if user_name == "Jessica Sara Lei ENFJ":
-        with st.expander("🔧 管理留言（僅限管理員）"):
+        with st.expander(t("admin")):
             feedbacks = get_feedbacks()
             if feedbacks:
                 unread_count = len([f for f in feedbacks if not f["is_read"]])
                 if unread_count > 0:
-                    st.warning(f"📬 有 {unread_count} 則未讀留言")
+                    st.warning(t("unread").format(unread_count))
                 
                 for fb in feedbacks:
                     with st.container():
-                        status = "✅ 已讀" if fb["is_read"] else "🆕 未讀"
+                        status = "✅ Read" if fb["is_read"] else "🆕 Unread"
                         st.markdown(f"**{fb['feedback_type']}** | {status} | 📅 {fb['created_at'][:16]}")
                         st.markdown(f"**{fb['title']}**")
-                        st.caption(f"👤 {fb['user_name'] or '匿名'}")
+                        st.caption(f"👤 {fb['user_name'] or 'Anonymous'}")
                         st.write(fb['content'])
                         if fb['image_url']:
-                            st.markdown(f"[🔗 查看圖片]({fb['image_url']})")
+                            st.markdown(f"[🔗 View Image]({fb['image_url']})")
                         
                         col1, col2 = st.columns(2)
                         with col1:
-                            if not fb["is_read"] and st.button(f"📖 標記已讀", key=f"read_{fb['feedback_id']}"):
+                            if not fb["is_read"] and st.button(t("mark_read"), key=f"read_{fb['feedback_id']}"):
                                 mark_feedback_read(fb['feedback_id'])
                                 st.rerun()
                         with col2:
-                            if st.button(f"🗑️ 刪除", key=f"del_{fb['feedback_id']}"):
+                            if st.button(t("delete"), key=f"del_{fb['feedback_id']}"):
                                 delete_feedback(fb['feedback_id'])
                                 st.rerun()
                         st.divider()
             else:
-                st.info("目前沒有留言")
+                st.info(t("no_feedback"))
 
 # === 主畫面 ===
 # 只在手機上顯示的提示
-st.markdown("""
+st.markdown(f"""
 <style>
-@media screen and (max-width: 768px) {
-    .mobile-only {
+@media screen and (max-width: 768px) {{
+    .mobile-only {{
         display: block;
-    }
-}
-@media screen and (min-width: 769px) {
-    .mobile-only {
+    }}
+}}
+@media screen and (min-width: 769px) {{
+    .mobile-only {{
         display: none;
-    }
-}
+    }}
+}}
 </style>
 <div class="mobile-only" style="background-color: #e0f2fe; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; text-align: center; border-left: 4px solid #0284c7;">
-    📱 點擊左上角「☰」或「>」打開側邊欄
+    {t('mobile_tip')}
 </div>
 """, unsafe_allow_html=True)
 
-st.header("📊 今日營養統計")
+st.header(t("stats_title"))
 
-view_date = st.date_input("查詢日期", value=st.session_state.view_date, key="view_date_picker")
+view_date = st.date_input(t("query_date"), value=st.session_state.view_date, key="view_date_picker")
 st.session_state.view_date = view_date
 
 stats = get_today_stats(user_name, view_date)
 
 st.markdown("---")
-st.caption(f"👤 使用者：{user_name}")
-st.caption(f"🔍 查詢日期：{view_date}")
+st.caption(f"{t('user_label')}：{user_name}")
+st.caption(f"{t('query_date')}：{view_date}")
 st.markdown("---")
 
 if stats:
@@ -706,66 +1038,66 @@ if stats:
     total_calcium = df["calcium"].sum()
     total_carbs = df["carbs"].sum()
     
-    st.subheader("📈 今日攝取量")
+    st.subheader(t("today_intake"))
     
     col1, col2, col3 = st.columns(3)
-    col1.metric("🥩 蛋白質", f"{total_protein:.1f} g")
-    col2.metric("🩸 鐵", f"{total_iron:.1f} mg")
-    col3.metric("🍊 維生素C", f"{total_vitamin_c:.1f} mg")
+    col1.metric(t("protein"), f"{total_protein:.1f} g")
+    col2.metric(t("iron"), f"{total_iron:.1f} mg")
+    col3.metric(t("vitamin_c"), f"{total_vitamin_c:.1f} mg")
     
     col4, col5, col6 = st.columns(3)
-    col4.metric("🌾 膳食纖維", f"{total_fiber:.1f} g")
-    col5.metric("🍬 糖", f"{total_sugar:.1f} g")
-    col6.metric("🦴 鈣", f"{total_calcium:.0f} mg")
+    col4.metric(t("fiber"), f"{total_fiber:.1f} g")
+    col5.metric(t("sugar"), f"{total_sugar:.1f} g")
+    col6.metric(t("calcium"), f"{total_calcium:.0f} mg")
     
     col7, col8, col9 = st.columns(3)
-    col7.metric("🍚 碳水化合物", f"{total_carbs:.1f} g")
+    col7.metric(t("carbs"), f"{total_carbs:.1f} g")
     
     if "protein_goal" in st.session_state:
         st.markdown("---")
-        st.caption("📌 以下是根據你的個人資料計算的每日攝取目標")
+        st.caption(t("daily_goal"))
         
         goal_col1, goal_col2, goal_col3, goal_col4 = st.columns(4)
-        goal_col1.metric("🥩 蛋白質目標", f"{st.session_state.protein_goal:.0f} 克")
-        goal_col2.metric("🩸 鐵目標", f"{st.session_state.iron_goal:.0f} 毫克")
-        goal_col3.metric("🍊 維生素C目標", f"{st.session_state.vitamin_c_goal:.0f} 毫克")
-        goal_col4.metric("🌾 膳食纖維目標", f"{st.session_state.fiber_goal:.0f} 克")
+        goal_col1.metric(t("protein_goal"), f"{st.session_state.protein_goal:.0f} g")
+        goal_col2.metric(t("iron_goal"), f"{st.session_state.iron_goal:.0f} mg")
+        goal_col3.metric(t("vitamin_c_goal"), f"{st.session_state.vitamin_c_goal:.0f} mg")
+        goal_col4.metric(t("fiber_goal"), f"{st.session_state.fiber_goal:.0f} g")
         
         goal_col5, goal_col6, goal_col7 = st.columns(3)
-        goal_col5.metric("🦴 鈣目標", f"{st.session_state.calcium_goal:.0f} 毫克")
-        goal_col6.metric("🍚 碳水化合物目標", f"{st.session_state.carbs_goal:.0f} 克")
+        goal_col5.metric(t("calcium_goal"), f"{st.session_state.calcium_goal:.0f} mg")
+        goal_col6.metric(t("carbs_goal"), f"{st.session_state.carbs_goal:.0f} g")
         
-        st.subheader("🎯 今日進度")
+        st.subheader(t("progress"))
         
         prog_col1, prog_col2 = st.columns(2)
         with prog_col1:
             protein_pct = min(100, total_protein / st.session_state.protein_goal * 100)
-            st.write(f"🥩 蛋白質：{total_protein:.1f} / {st.session_state.protein_goal:.0f} 克 ({protein_pct:.0f}%)")
+            st.write(f"{t('protein')}：{total_protein:.1f} / {st.session_state.protein_goal:.0f} g ({protein_pct:.0f}%)")
             st.progress(protein_pct / 100)
             
             iron_pct = min(100, total_iron / st.session_state.iron_goal * 100)
-            st.write(f"🩸 鐵：{total_iron:.1f} / {st.session_state.iron_goal:.0f} 毫克 ({iron_pct:.0f}%)")
+            st.write(f"{t('iron')}：{total_iron:.1f} / {st.session_state.iron_goal:.0f} mg ({iron_pct:.0f}%)")
             st.progress(iron_pct / 100)
             
             fiber_pct = min(100, total_fiber / st.session_state.fiber_goal * 100)
-            st.write(f"🌾 膳食纖維：{total_fiber:.1f} / {st.session_state.fiber_goal:.0f} 克 ({fiber_pct:.0f}%)")
+            st.write(f"{t('fiber')}：{total_fiber:.1f} / {st.session_state.fiber_goal:.0f} g ({fiber_pct:.0f}%)")
             st.progress(fiber_pct / 100)
         
         with prog_col2:
             vitamin_c_pct = min(100, total_vitamin_c / st.session_state.vitamin_c_goal * 100)
-            st.write(f"🍊 維生素C：{total_vitamin_c:.1f} / {st.session_state.vitamin_c_goal:.0f} 毫克 ({vitamin_c_pct:.0f}%)")
+            st.write(f"{t('vitamin_c')}：{total_vitamin_c:.1f} / {st.session_state.vitamin_c_goal:.0f} mg ({vitamin_c_pct:.0f}%)")
             st.progress(vitamin_c_pct / 100)
             
             calcium_pct = min(100, total_calcium / st.session_state.calcium_goal * 100)
-            st.write(f"🦴 鈣：{total_calcium:.0f} / {st.session_state.calcium_goal:.0f} 毫克 ({calcium_pct:.0f}%)")
+            st.write(f"{t('calcium')}：{total_calcium:.0f} / {st.session_state.calcium_goal:.0f} mg ({calcium_pct:.0f}%)")
             st.progress(calcium_pct / 100)
             
             carbs_pct = min(100, total_carbs / st.session_state.carbs_goal * 100)
-            st.write(f"🍚 碳水化合物：{total_carbs:.1f} / {st.session_state.carbs_goal:.0f} 克 ({carbs_pct:.0f}%)")
+            st.write(f"{t('carbs')}：{total_carbs:.1f} / {st.session_state.carbs_goal:.0f} g ({carbs_pct:.0f}%)")
             st.progress(carbs_pct / 100)
 else:
-    st.info(f"📭 {view_date} 還沒有記錄")
+    st.info(t("no_record"))
 
 # === 免責聲明 ===
 st.markdown("---")
-st.caption("⚠️ **免責聲明**：本應用程式之營養數據主要來自美國農業部（USDA）FoodData Central 資料庫，僅供參考。")
+st.caption(t("disclaimer"))
