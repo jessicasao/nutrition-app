@@ -82,6 +82,7 @@ TEXT = {
         "category_vegfruit": "蔬果",
         "category_snack": "點心",
         "category_drink": "飲品",
+        "category_oil": "油",  # 中文版
         "select_item": "選擇項目",
         "grams": "重量 (克)",
         "portion": "份量",
@@ -907,14 +908,15 @@ with st.sidebar:
     log_date = st.date_input(t("record_date"), value=st.session_state.log_date, key="log_date_picker")
     st.session_state.log_date = log_date
     
-    selected_category = st.radio(t("category"), [t("category_food"), t("category_vegfruit"), t("category_snack"), t("category_drink")], horizontal=True)
+    selected_category = st.radio(t("category"), [t("category_food"), t("category_vegfruit"), t("category_snack"), t("category_drink"), t("category_oil")], horizontal=True)
     
     # 映射分類到資料庫值
     category_map = {
         t("category_food"): "食物",
         t("category_vegfruit"): "蔬果",
         t("category_snack"): "點心",
-        t("category_drink"): "飲品"
+        t("category_drink"): "飲品",
+        t("category_oil"): "油"
     }
     db_category = category_map[selected_category]
     
