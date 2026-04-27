@@ -612,10 +612,9 @@ if not st.session_state.logged_in:
         st.session_state.login_user_name = auto_login
         st.rerun()
 
-# === 登入/註冊畫面 ===
-
   # === 登入/註冊畫面 ===
 if not st.session_state.logged_in:
+    st.warning("⏰ 如果遇上休眠狀態，可能需要等30秒或重新整理頁面。\n\n⏰ If you encounter sleep mode, it may take 30 seconds or refresh the page.")
     st.markdown("""
     <div style="background-color: #f0fdf4; padding: 1.5rem; border-radius: 1rem; margin-bottom: 1rem; text-align: center;">
         <h1 style="color: #166534;">🥗 WholeFood Tracker</h1>
